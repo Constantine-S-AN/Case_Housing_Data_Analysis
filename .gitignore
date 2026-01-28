@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+.python-version
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Data artifacts (keep cleaned output if you want)
+# Uncomment the next line if you do NOT want to commit the cleaned CSV either:
+# train_cleaned.csv
+
