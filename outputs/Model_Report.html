@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Model Report</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;line-height:1.6;color:#111;max-width:980px;margin:2rem auto;padding:0 1rem;}
+pre{background:#f5f5f5;border:1px solid #ddd;border-radius:6px;padding:.9rem;overflow-x:auto;}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+table{border-collapse:collapse;width:100%;margin:.7rem 0 1.2rem;}
+th,td{border:1px solid #ddd;padding:.5rem .6rem;text-align:left;font-size:.95rem;}
+th{background:#f3f4f6;}
+img{max-width:100%;border:1px solid #ddd;border-radius:4px;}
+</style>
+</head>
+<body>
+<h1>Model Report</h1>
+<p><strong>Pandoc not found. HTML is generated, and Python fallback also exports PDF.</strong></p>
+<h2>Model Choice</h2>
+<ul>
+<li>Selected model: <strong>filtered</strong></li>
+<li>Selection rationale: Filtered CV RMSE improved by 35.85%; choose filtered model.</li>
+</ul>
+<h2>1) Coding (Core Pipeline)</h2>
+<pre><code>from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LassoCV
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+
+preprocessor = ColumnTransformer([
+    (&quot;num&quot;, Pipeline([
+        (&quot;imputer&quot;, SimpleImputer(strategy=&quot;median&quot;)),
+        (&quot;scaler&quot;, StandardScaler()),
+    ]), numeric_cols),
+    (&quot;cat&quot;, Pipeline([
+        (&quot;imputer&quot;, SimpleImputer(strategy=&quot;most_frequent&quot;)),
+        (&quot;onehot&quot;, OneHotEncoder(handle_unknown=&quot;ignore&quot;)),
+    ]), categorical_cols),
+])
+
+model = Pipeline([
+    (&quot;preprocessor&quot;, preprocessor),
+    (&quot;lasso&quot;, LassoCV(cv=5, random_state=42)),
+])</code></pre>
+<h2>2) Regression Equation</h2>
+<p>General form:</p>
+<ul>
+<li>y = log1p(SalePrice)</li>
+<li>y_hat = beta0 + sum(beta_j * x_j_tilde)</li>
+</ul>
+<p>Expanded equation (Top10 coefficients only):</p>
+<pre><code>y_hat = 11.858684 + 0.150255 * cat__Neighborhood_Crawfor + 0.121175 * num__GrLivArea + 0.090703 * cat__Neighborhood_StoneBr - 0.089279 * cat__MasVnrType_BrkCmn - 0.083834 * cat__Neighborhood_MeadowV - 0.077165 * cat__RoofMatl_Tar&amp;Grv + 0.070704 * num__YearBuilt + 0.070021 * cat__Exterior1st_BrkFace + 0.069353 * num__OverallQual + 0.055265 * cat__Neighborhood_Somerst</code></pre>
+<p>Top10 absolute coefficients:</p>
+<table><thead><tr><th>Rank</th><th>Feature</th><th>Coefficient</th></tr></thead><tbody><tr><td>1</td><td>cat__Neighborhood_Crawfor</td><td>0.150255</td></tr><tr><td>2</td><td>num__GrLivArea</td><td>0.121175</td></tr><tr><td>3</td><td>cat__Neighborhood_StoneBr</td><td>0.090703</td></tr><tr><td>4</td><td>cat__MasVnrType_BrkCmn</td><td>-0.089279</td></tr><tr><td>5</td><td>cat__Neighborhood_MeadowV</td><td>-0.083834</td></tr><tr><td>6</td><td>cat__RoofMatl_Tar&amp;Grv</td><td>-0.077165</td></tr><tr><td>7</td><td>num__YearBuilt</td><td>0.070704</td></tr><tr><td>8</td><td>cat__Exterior1st_BrkFace</td><td>0.070021</td></tr><tr><td>9</td><td>num__OverallQual</td><td>0.069353</td></tr><tr><td>10</td><td>cat__Neighborhood_Somerst</td><td>0.055265</td></tr></tbody></table>
+<h2>3) Regression Result</h2>
+<ul>
+<li>Best alpha: <strong>0.00030808</strong></li>
+<li>Non-zero coefficients: <strong>118</strong></li>
+<li>Top coefficients file: <code>outputs/top_coefficients.csv</code></li>
+<li>CV protocol: <code>KFold(n_splits=5, shuffle=True, random_state=42)</code> with <code>neg_root_mean_squared_error</code> on log1p scale.</li>
+</ul>
+<p>Top positive coefficients:</p>
+<table><thead><tr><th>Feature</th><th>Coefficient</th></tr></thead><tbody><tr><td>cat__Neighborhood_Crawfor</td><td>0.150255</td></tr><tr><td>num__GrLivArea</td><td>0.121175</td></tr><tr><td>cat__Neighborhood_StoneBr</td><td>0.090703</td></tr><tr><td>num__YearBuilt</td><td>0.070704</td></tr><tr><td>cat__Exterior1st_BrkFace</td><td>0.070021</td></tr><tr><td>num__OverallQual</td><td>0.069353</td></tr><tr><td>cat__Neighborhood_Somerst</td><td>0.055265</td></tr><tr><td>cat__Neighborhood_BrkSide</td><td>0.054326</td></tr><tr><td>cat__Neighborhood_NridgHt</td><td>0.053706</td></tr><tr><td>cat__Functional_Typ</td><td>0.053216</td></tr></tbody></table>
+<p>Top negative coefficients:</p>
+<table><thead><tr><th>Feature</th><th>Coefficient</th></tr></thead><tbody><tr><td>cat__MasVnrType_BrkCmn</td><td>-0.089279</td></tr><tr><td>cat__Neighborhood_MeadowV</td><td>-0.083834</td></tr><tr><td>cat__RoofMatl_Tar&amp;Grv</td><td>-0.077165</td></tr><tr><td>cat__Neighborhood_Edwards</td><td>-0.042997</td></tr><tr><td>cat__MSZoning_C (all)</td><td>-0.039919</td></tr><tr><td>cat__GarageType_CarPort</td><td>-0.039398</td></tr><tr><td>cat__SaleCondition_Abnorml</td><td>-0.038027</td></tr><tr><td>cat__BldgType_Twnhs</td><td>-0.032616</td></tr><tr><td>cat__Condition1_Artery</td><td>-0.029845</td></tr><tr><td>cat__GarageQual_Fa</td><td>-0.029201</td></tr></tbody></table>
+<h3>Coefficient interpretation</h3>
+<ul>
+<li>Numeric features use StandardScaler, so each numeric coefficient means expected change in log1p(SalePrice) for a +1 standard deviation change.</li>
+<li>Categorical features are one-hot encoded, so each category coefficient is interpreted relative to the omitted baseline category.</li>
+<li>Rare-category coefficients can be unstable; treat them as predictive signals rather than causal effects.</li>
+</ul>
+<h2>4) Graph: Predicted vs Actual</h2>
+<p><img src="pred_vs_actual.png" alt="Holdout Predicted vs Actual" /></p>
+<h2>5) RMSE</h2>
+<p>RMSE (log1p scale) formula:</p>
+<ul>
+<li>RMSE_log = sqrt((1/n) * sum((y_i - y_hat_i)^2)), where y = log1p(SalePrice).</li>
+<li>This log-scale error emphasizes multiplicative/relative discrepancy.</li>
+</ul>
+<p>Back-transform and dollar-scale metrics:</p>
+<ul>
+<li>SalePrice_hat = exp(y_hat) - 1</li>
+<li>SalePrice_true = exp(y_true) - 1</li>
+<li>typical_relative_error = exp(holdout_rmse_log) - 1</li>
+</ul>
+<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody><tr><td>holdout_rmse_log</td><td>0.099068</td></tr><tr><td>cv_rmse_log_mean</td><td>0.091781</td></tr><tr><td>holdout_rmse_dollar</td><td>19456.02</td></tr><tr><td>holdout_mae_dollar</td><td>13215.74</td></tr><tr><td>typical_relative_error = exp(holdout_rmse_log)-1</td><td>0.104141 (10.41%)</td></tr></tbody></table>
+<ul>
+<li>5-fold CV RMSE (folds): 0.097077, 0.096037, 0.089118, 0.091105, 0.085565</li>
+</ul>
+<h3>Baseline vs Filtered (Sensitivity Analysis)</h3>
+<table><thead><tr><th>Model</th><th>n_rows</th><th>holdout_rmse_log</th><th>cv_rmse_log_mean</th><th>selected</th></tr></thead><tbody><tr><td>Baseline</td><td>1460</td><td>0.135977</td><td>0.143067</td><td>No</td></tr><tr><td>Filtered (Cook&#x27;s D &gt; 4/n)</td><td>1382</td><td>0.099068</td><td>0.091781</td><td>Yes</td></tr></tbody></table>
+<ul>
+<li>This is a sensitivity analysis for influential points, not arbitrary deletion of data.</li>
+<li>A better filtered score indicates influence sensitivity; otherwise baseline is already robust.</li>
+</ul>
+<h2>Appendix: Outlier Diagnostics</h2>
+<p>Cook&#x27;s Distance threshold (4/n rule):</p>
+<ul>
+<li>D_i &gt; 4/n, where n = 1460 and 4/n = <strong>0.002740</strong>.</li>
+</ul>
+<p>Outlier impact figure:</p>
+<ul>
+<li>See <code>../graph/09_outlier_impact_rmse.png</code> for RMSE before and after removing high-influence points.</li>
+<li>The chart is a sensitivity check: a noticeable RMSE drop indicates a small set of influential points drives error disproportionately.</li>
+<li>If the change is small, model performance is relatively robust to those candidate outliers.</li>
+</ul>
+</body>
+</html>
