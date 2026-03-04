@@ -18,3 +18,18 @@ This will write `train_cleaned.csv` in the same folder.
 
 ### Graphs and Analysis
 See `graph/graph analysis.md` for detailed interpretations of each plot.
+
+### Reproduce Report
+
+Run the following commands from the repository root:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python scripts/build_model_report.py
+```
+
+Final submission file:
+- `outputs/Model_Report.pdf`
+- or `outputs/Model_Report.html` (open in browser and print/save as PDF)

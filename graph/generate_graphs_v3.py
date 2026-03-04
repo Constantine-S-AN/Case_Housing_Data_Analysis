@@ -31,12 +31,17 @@ def warn(msg: str) -> None:
 
 
 def find_cleaned_train_csv() -> Path | None:
-    candidates = [
-        Path.cwd() / "train_cleaned_v2.csv",
-        Path.cwd() / "data" / "train_cleaned_v2.csv",
-        ROOT_DIR / "train_cleaned_v2.csv",
-        ROOT_DIR / "data" / "train_cleaned_v2.csv",
-    ]
+    filenames = ["train_cleaned_v2.csv", "train_cleaned.csv"]
+    candidates: list[Path] = []
+    for name in filenames:
+        candidates.extend(
+            [
+                Path.cwd() / name,
+                Path.cwd() / "data" / name,
+                ROOT_DIR / name,
+                ROOT_DIR / "data" / name,
+            ]
+        )
     seen = set()
     for path in candidates:
         resolved = path.resolve()
@@ -47,10 +52,11 @@ def find_cleaned_train_csv() -> Path | None:
             return path
 
     # Fallback search if expected paths are missing.
-    for path in Path.cwd().rglob("train_cleaned_v2.csv"):
-        return path
-    for path in ROOT_DIR.rglob("train_cleaned_v2.csv"):
-        return path
+    for name in filenames:
+        for path in Path.cwd().rglob(name):
+            return path
+        for path in ROOT_DIR.rglob(name):
+            return path
     return None
 
 
@@ -547,7 +553,9 @@ def plot_12_lasso_coefficients(df: pd.DataFrame) -> None:
 def main() -> None:
     data_path = find_cleaned_train_csv()
     if data_path is None:
-        raise FileNotFoundError("Could not locate train_cleaned_v2.csv in root or data/ directories.")
+        raise FileNotFoundError(
+            "Could not locate train_cleaned_v2.csv or train_cleaned.csv in root or data/ directories."
+        )
 
     info(f"Loading data from: {data_path.resolve()}")
     df = pd.read_csv(data_path)
