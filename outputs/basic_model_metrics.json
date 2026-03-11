@@ -1,0 +1,23 @@
+{
+  "data_path": "/Users/shijiean/Desktop/491/Case____Housing__export/train_cleaned_v2.csv",
+  "model_family": "basic_multiple_linear_regression",
+  "target": "SalePrice",
+  "formula": "y_i = beta_0 + beta_x X_i + beta_D D_i + U_i",
+  "all_available_variables_used": true,
+  "n_rows": 1460,
+  "n_features_before_encoding": 79,
+  "n_features_after_encoding": 242,
+  "holdout_rmse_dollar": 30995.620233570713,
+  "holdout_mae_dollar": 20056.144222007617,
+  "cv_rmse_dollar_mean": 34396.28977646127,
+  "cv_rmse_dollar_std": 11516.43157448453,
+  "cv_rmse_dollar_folds": [
+    30991.4073656416,
+    28818.447615154804,
+    53756.5887024704,
+    34645.288830678764,
+    23769.716368360787
+  ],
+  "intercept": -258120.1792580705,
+  "coefficients_csv": "/Users/shijiean/Desktop/491/Case____Housing__export/outputs/basic_model_coefficients.csv"
+}
