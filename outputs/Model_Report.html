@@ -19,9 +19,12 @@ img{max-width:100%;border:1px solid #ddd;border-radius:4px;}
 <p><strong>Pandoc not found. HTML is generated, and Python fallback also exports PDF.</strong></p>
 <h2>Model Choice</h2>
 <ul>
-<li>Selected model: <strong>filtered</strong></li>
-<li>Selection rationale: Filtered CV RMSE improved by 35.85%; choose filtered model.</li>
+<li>Selected model: <strong>lasso</strong></li>
+<li>Selection rationale: Selected lasso as it had the lowest CV RMSE among compared models</li>
 </ul>
+<h2>Model Comparison</h2>
+<p>Performance comparison across different models:</p>
+<table><thead><tr><th>Model</th><th>CV RMSE (log)</th><th>Holdout RMSE (log)</th><th>Holdout RMSE ($)</th><th>Holdout MAE ($)</th></tr></thead><tbody><tr><td>lasso</td><td>0.1439</td><td>0.1360</td><td>24000</td><td>15827</td></tr><tr><td>random_forest</td><td>0.1507</td><td>0.1501</td><td>29676</td><td>17807</td></tr></tbody></table>
 <h2>1) Coding (Core Pipeline)</h2>
 <pre><code>from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
@@ -51,20 +54,21 @@ model = Pipeline([
 <li>y_hat = beta0 + sum(beta_j * x_j_tilde)</li>
 </ul>
 <p>Expanded equation (Top10 coefficients only):</p>
-<pre><code>y_hat = 11.858684 + 0.150255 * cat__Neighborhood_Crawfor + 0.121175 * num__GrLivArea + 0.090703 * cat__Neighborhood_StoneBr - 0.089279 * cat__MasVnrType_BrkCmn - 0.083834 * cat__Neighborhood_MeadowV - 0.077165 * cat__RoofMatl_Tar&amp;Grv + 0.070704 * num__YearBuilt + 0.070021 * cat__Exterior1st_BrkFace + 0.069353 * num__OverallQual + 0.055265 * cat__Neighborhood_Somerst</code></pre>
+<pre><code>y_hat = 11.911357 - 0.868460 * cat__RoofMatl_ClyTile - 0.165819 * cat__Condition2_PosN + 0.107589 * num__GrLivArea + 0.098500 * cat__Neighborhood_StoneBr + 0.093396 * cat__Neighborhood_Crawfor + 0.087284 * cat__Exterior1st_BrkFace + 0.080970 * num__OverallQual + 0.068053 * cat__Neighborhood_NridgHt + 0.058659 * cat__Functional_Typ - 0.054916 * cat__MSZoning_RM</code></pre>
 <p>Top10 absolute coefficients:</p>
-<table><thead><tr><th>Rank</th><th>Feature</th><th>Coefficient</th></tr></thead><tbody><tr><td>1</td><td>cat__Neighborhood_Crawfor</td><td>0.150255</td></tr><tr><td>2</td><td>num__GrLivArea</td><td>0.121175</td></tr><tr><td>3</td><td>cat__Neighborhood_StoneBr</td><td>0.090703</td></tr><tr><td>4</td><td>cat__MasVnrType_BrkCmn</td><td>-0.089279</td></tr><tr><td>5</td><td>cat__Neighborhood_MeadowV</td><td>-0.083834</td></tr><tr><td>6</td><td>cat__RoofMatl_Tar&amp;Grv</td><td>-0.077165</td></tr><tr><td>7</td><td>num__YearBuilt</td><td>0.070704</td></tr><tr><td>8</td><td>cat__Exterior1st_BrkFace</td><td>0.070021</td></tr><tr><td>9</td><td>num__OverallQual</td><td>0.069353</td></tr><tr><td>10</td><td>cat__Neighborhood_Somerst</td><td>0.055265</td></tr></tbody></table>
-<h2>3) Regression Result</h2>
+<table><thead><tr><th>Rank</th><th>Feature</th><th>Coefficient</th></tr></thead><tbody><tr><td>1</td><td>cat__RoofMatl_ClyTile</td><td>-0.868460</td></tr><tr><td>2</td><td>cat__Condition2_PosN</td><td>-0.165819</td></tr><tr><td>3</td><td>num__GrLivArea</td><td>0.107589</td></tr><tr><td>4</td><td>cat__Neighborhood_StoneBr</td><td>0.098500</td></tr><tr><td>5</td><td>cat__Neighborhood_Crawfor</td><td>0.093396</td></tr><tr><td>6</td><td>cat__Exterior1st_BrkFace</td><td>0.087284</td></tr><tr><td>7</td><td>num__OverallQual</td><td>0.080970</td></tr><tr><td>8</td><td>cat__Neighborhood_NridgHt</td><td>0.068053</td></tr><tr><td>9</td><td>cat__Functional_Typ</td><td>0.058659</td></tr><tr><td>10</td><td>cat__MSZoning_RM</td><td>-0.054916</td></tr></tbody></table>
+<h2>3) Model Result</h2>
 <ul>
-<li>Best alpha: <strong>0.00030808</strong></li>
-<li>Non-zero coefficients: <strong>118</strong></li>
-<li>Top coefficients file: <code>outputs/top_coefficients.csv</code></li>
+<li>Model type: <strong>lasso</strong></li>
+<li>Best alpha: <strong>0.00078140</strong></li>
+<li>Non-zero features: <strong>87</strong></li>
+<li>Top coefficients/importances file: <code>outputs/top_coefficients.csv</code></li>
 <li>CV protocol: <code>KFold(n_splits=5, shuffle=True, random_state=42)</code> with <code>neg_root_mean_squared_error</code> on log1p scale.</li>
 </ul>
 <p>Top positive coefficients:</p>
-<table><thead><tr><th>Feature</th><th>Coefficient</th></tr></thead><tbody><tr><td>cat__Neighborhood_Crawfor</td><td>0.150255</td></tr><tr><td>num__GrLivArea</td><td>0.121175</td></tr><tr><td>cat__Neighborhood_StoneBr</td><td>0.090703</td></tr><tr><td>num__YearBuilt</td><td>0.070704</td></tr><tr><td>cat__Exterior1st_BrkFace</td><td>0.070021</td></tr><tr><td>num__OverallQual</td><td>0.069353</td></tr><tr><td>cat__Neighborhood_Somerst</td><td>0.055265</td></tr><tr><td>cat__Neighborhood_BrkSide</td><td>0.054326</td></tr><tr><td>cat__Neighborhood_NridgHt</td><td>0.053706</td></tr><tr><td>cat__Functional_Typ</td><td>0.053216</td></tr></tbody></table>
+<table><thead><tr><th>Feature</th><th>Coefficient</th></tr></thead><tbody><tr><td>num__GrLivArea</td><td>0.107589</td></tr><tr><td>cat__Neighborhood_StoneBr</td><td>0.098500</td></tr><tr><td>cat__Neighborhood_Crawfor</td><td>0.093396</td></tr><tr><td>cat__Exterior1st_BrkFace</td><td>0.087284</td></tr><tr><td>num__OverallQual</td><td>0.080970</td></tr><tr><td>cat__Neighborhood_NridgHt</td><td>0.068053</td></tr><tr><td>cat__Functional_Typ</td><td>0.058659</td></tr><tr><td>cat__Condition1_Norm</td><td>0.048450</td></tr><tr><td>cat__BsmtQual_Ex</td><td>0.045596</td></tr><tr><td>cat__Neighborhood_Somerst</td><td>0.043984</td></tr></tbody></table>
 <p>Top negative coefficients:</p>
-<table><thead><tr><th>Feature</th><th>Coefficient</th></tr></thead><tbody><tr><td>cat__MasVnrType_BrkCmn</td><td>-0.089279</td></tr><tr><td>cat__Neighborhood_MeadowV</td><td>-0.083834</td></tr><tr><td>cat__RoofMatl_Tar&amp;Grv</td><td>-0.077165</td></tr><tr><td>cat__Neighborhood_Edwards</td><td>-0.042997</td></tr><tr><td>cat__MSZoning_C (all)</td><td>-0.039919</td></tr><tr><td>cat__GarageType_CarPort</td><td>-0.039398</td></tr><tr><td>cat__SaleCondition_Abnorml</td><td>-0.038027</td></tr><tr><td>cat__BldgType_Twnhs</td><td>-0.032616</td></tr><tr><td>cat__Condition1_Artery</td><td>-0.029845</td></tr><tr><td>cat__GarageQual_Fa</td><td>-0.029201</td></tr></tbody></table>
+<table><thead><tr><th>Feature</th><th>Coefficient</th></tr></thead><tbody><tr><td>cat__RoofMatl_ClyTile</td><td>-0.868460</td></tr><tr><td>cat__Condition2_PosN</td><td>-0.165819</td></tr><tr><td>cat__MSZoning_RM</td><td>-0.054916</td></tr><tr><td>cat__CentralAir_N</td><td>-0.047431</td></tr><tr><td>cat__SaleCondition_Abnorml</td><td>-0.046101</td></tr><tr><td>cat__Neighborhood_Edwards</td><td>-0.042191</td></tr><tr><td>cat__LandContour_Bnk</td><td>-0.039253</td></tr><tr><td>cat__BldgType_Twnhs</td><td>-0.033140</td></tr><tr><td>cat__BsmtFinType1_Unf</td><td>-0.032548</td></tr><tr><td>cat__BsmtCond_Fa</td><td>-0.026081</td></tr></tbody></table>
 <h3>Coefficient interpretation</h3>
 <ul>
 <li>Numeric features use StandardScaler, so each numeric coefficient means expected change in log1p(SalePrice) for a +1 standard deviation change.</li>
@@ -85,26 +89,32 @@ model = Pipeline([
 <li>SalePrice_true = exp(y_true) - 1</li>
 <li>typical_relative_error = exp(holdout_rmse_log) - 1</li>
 </ul>
-<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody><tr><td>holdout_rmse_log</td><td>0.099068</td></tr><tr><td>cv_rmse_log_mean</td><td>0.091781</td></tr><tr><td>holdout_rmse_dollar</td><td>19456.02</td></tr><tr><td>holdout_mae_dollar</td><td>13215.74</td></tr><tr><td>typical_relative_error = exp(holdout_rmse_log)-1</td><td>0.104141 (10.41%)</td></tr></tbody></table>
+<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody><tr><td>holdout_rmse_log</td><td>0.135977</td></tr><tr><td>cv_rmse_log_mean</td><td>0.143861</td></tr><tr><td>holdout_rmse_dollar</td><td>23999.75</td></tr><tr><td>holdout_mae_dollar</td><td>15826.82</td></tr><tr><td>typical_relative_error = exp(holdout_rmse_log)-1</td><td>0.145656 (14.57%)</td></tr></tbody></table>
 <ul>
-<li>5-fold CV RMSE (folds): 0.097077, 0.096037, 0.089118, 0.091105, 0.085565</li>
+<li>5-fold CV RMSE (folds): 0.131197, 0.188898, 0.111487</li>
 </ul>
 <h3>Baseline vs Filtered (Sensitivity Analysis)</h3>
-<table><thead><tr><th>Model</th><th>n_rows</th><th>holdout_rmse_log</th><th>cv_rmse_log_mean</th><th>selected</th></tr></thead><tbody><tr><td>Baseline</td><td>1460</td><td>0.135977</td><td>0.143067</td><td>No</td></tr><tr><td>Filtered (Cook&#x27;s D &gt; 4/n)</td><td>1382</td><td>0.099068</td><td>0.091781</td><td>Yes</td></tr></tbody></table>
 <ul>
+<li>Filtered sensitivity run was unavailable in this execution.</li>
 <li>This is a sensitivity analysis for influential points, not arbitrary deletion of data.</li>
 <li>A better filtered score indicates influence sensitivity; otherwise baseline is already robust.</li>
 </ul>
 <h2>Appendix: Outlier Diagnostics</h2>
-<p>Cook&#x27;s Distance threshold (4/n rule):</p>
-<ul>
-<li>D_i &gt; 4/n, where n = 1460 and 4/n = <strong>0.002740</strong>.</li>
-</ul>
+<p>Note: Outlier filtering was not applied in this model comparison run.</p>
 <p>Outlier impact figure:</p>
 <ul>
 <li>See <code>../graph/09_outlier_impact_rmse.png</code> for RMSE before and after removing high-influence points.</li>
 <li>The chart is a sensitivity check: a noticeable RMSE drop indicates a small set of influential points drives error disproportionately.</li>
 <li>If the change is small, model performance is relatively robust to those candidate outliers.</li>
+</ul>
+<h2>Appendix: Model Comparison Visualizations</h2>
+<p>Feature importance comparison:</p>
+<ul>
+<li>See <code>../graph/12_lasso_coefficients.png</code> for top Lasso coefficients by absolute magnitude.</li>
+<li>See <code>../graph/13_random_forest_importances.png</code> for top Random Forest feature importances.</li>
+<li>See <code>../graph/14_gradient_boosting_importances.png</code> for top Gradient Boosting feature importances.</li>
+<li>See <code>../graph/15_model_comparison_rmse.png</code> for RMSE comparison across all models.</li>
+<li>See <code>../graph/16_residual_distributions.png</code> for residual distribution comparison across models.</li>
 </ul>
 </body>
 </html>

@@ -1,34 +1,55 @@
 {
-  "data_path": "/Users/shijiean/Desktop/491/Case____Housing__export/train_cleaned_v2.csv",
+  "data_path": "C:\\Users\\ctruo\\OneDrive\\Documents\\Freshman RCC Books\\Case_Housing_Data_Analysis\\train_cleaned.csv",
   "target": "logSalePrice = log1p(SalePrice)",
-  "selected_model": "filtered",
-  "selected_model_reason": "Filtered CV RMSE improved by 35.85%; choose filtered model.",
-  "holdout_rmse": 0.09906781847757751,
-  "holdout_rmse_log": 0.09906781847757751,
-  "cv_rmse": 0.0917805188666428,
-  "cv_rmse_log_mean": 0.0917805188666428,
-  "cv_rmse_log_std": 0.004804836651411374,
+  "selected_model": "lasso",
+  "selected_model_reason": "Selected lasso as it had the lowest CV RMSE among compared models",
+  "model_comparison": {
+    "lasso": {
+      "cv_rmse_log_mean": 0.14386074784940253,
+      "holdout_rmse_log": 0.13597729553844537,
+      "holdout_rmse_dollar": 23999.754534284068,
+      "holdout_mae_dollar": 15826.823423717924,
+      "nonzero_count": 87
+    },
+    "random_forest": {
+      "cv_rmse_log_mean": 0.15069687729904116,
+      "holdout_rmse_log": 0.15011409588472827,
+      "holdout_rmse_dollar": 29675.627947711866,
+      "holdout_mae_dollar": 17807.19415895575,
+      "nonzero_count": 201
+    },
+    "gradient_boosting": {
+      "cv_rmse_log_mean": 0.19157950751021371,
+      "holdout_rmse_log": 0.21361153050784754,
+      "holdout_rmse_dollar": 48560.57892922043,
+      "holdout_mae_dollar": 26441.92257888638,
+      "nonzero_count": 16
+    }
+  },
+  "holdout_rmse": 0.13597729553844537,
+  "holdout_rmse_log": 0.13597729553844537,
+  "cv_rmse": 0.14386074784940253,
+  "cv_rmse_log_mean": 0.14386074784940253,
+  "cv_rmse_log_std": 0.04022926870547971,
   "cv_rmse_log_folds": [
-    0.09707692031611545,
-    0.09603724490323945,
-    0.08911775825653441,
-    0.0911052960974223,
-    0.0855653747599024
+    0.13119744136825826,
+    0.18889801518277968,
+    0.11148678699716966
   ],
-  "holdout_rmse_dollar": 19456.023127061064,
-  "holdout_mae_dollar": 13215.737760205187,
-  "typical_relative_error": 0.10414117819351142,
-  "best_alpha": 0.00030808085652336175,
-  "nonzero_count": 118,
-  "cooks_distance_threshold_4_over_n": 0.0027397260273972603,
-  "influential_points_count": 78,
+  "holdout_rmse_dollar": 23999.754534284068,
+  "holdout_mae_dollar": 15826.823423717924,
+  "typical_relative_error": 0.14565588179964786,
+  "best_alpha": 0.0007814020258273761,
+  "nonzero_count": 87,
+  "cooks_distance_threshold_4_over_n": null,
+  "influential_points_count": 0,
   "n_rows_total": 1460,
-  "n_rows_model": 1382,
+  "n_rows_model": 1460,
   "n_features_before_encoding": 79,
-  "n_features_after_encoding": 280,
-  "baseline_holdout_rmse_log": 0.13597729553844506,
-  "baseline_cv_rmse_log_mean": 0.14306691547601522,
-  "filtered_holdout_rmse_log": 0.09906781847757751,
-  "filtered_cv_rmse_log_mean": 0.0917805188666428,
-  "filtered_improvement_ratio_vs_baseline_cv": 0.3584783836202189
+  "n_features_after_encoding": 285,
+  "baseline_holdout_rmse_log": 0.13597729553844537,
+  "baseline_cv_rmse_log_mean": 0.14386074784940253,
+  "filtered_holdout_rmse_log": null,
+  "filtered_cv_rmse_log_mean": null,
+  "filtered_improvement_ratio_vs_baseline_cv": null
 }
