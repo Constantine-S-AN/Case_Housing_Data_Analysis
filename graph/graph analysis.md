@@ -37,18 +37,18 @@ Below are the plots generated from `train_cleaned_v2.csv` and the key insights f
 
 9) **Outlier Impact on RMSE** (`graph/09_outlier_impact_rmse.png`)
    - Insight: Removing influential points reduced RMSE on `log1p(SalePrice)` from `0.1597 -> 0.1196` (holdout) and `0.1667 -> 0.1169` (KFold CV).
-   - Decision: Maintain two tracks: full-data model for robustness and filtered-data model for presentation-grade interpretability.
-   - Validation: Adopt filtered training only when both deterministic holdout RMSE and CV RMSE improve together.
+   - Decision: Treat this as an OLS-style sensitivity diagnostic, not the final model scorecard. Keep both full-data and filtered variants visible so the final Lasso choice is evidence-based rather than hidden.
+   - Validation: Promote the filtered version only when both holdout RMSE and CV RMSE improve together in the final Lasso pipeline as well.
 
 10) **Engineered TotalSF vs Price** (`graph/10_totalsf_vs_logprice.png`)
    - Insight: `TotalSF = GrLivArea + TotalBsmtSF` shows a strong positive association with `log1p(SalePrice)` (corr `~0.773`).
-   - Decision: Promote `TotalSF` to a core engineered predictor in baseline and regularized models.
-   - Validation: Keep `TotalSF` only if it consistently improves CV RMSE and retains a stable positive coefficient.
+   - Decision: Treat `TotalSF` as a candidate engineered predictor worth testing, not an automatic inclusion.
+   - Validation: Retain `TotalSF` only if the final Lasso cross-validation actually improves; otherwise keep the original variables for a cleaner and more defensible specification.
 
 11) **HouseAge & RemodAge Trends** (`graph/11_houseage_remodage_trends.png`)
    - Insight: Binned median `log1p(SalePrice)` declines with both `HouseAge` and `RemodAge`, consistent with aging/depreciation effects.
-   - Decision: Include age features in the model, with optional binning/nonlinear terms if linear effects are too rigid.
-   - Validation: Compare linear vs binned variants and verify trend consistency across folds (not just one split).
+   - Decision: Use these age variables as motivated candidates for feature engineering, then keep them only if they add validation value beyond the original housing attributes already in the model.
+   - Validation: Compare the engineered-feature variant against the original Lasso feature set and only retain the extra variables when cross-validated RMSE improves materially.
 
 12) **Lasso Coefficients (Top 15)** (`graph/12_lasso_coefficients.png`)
    - Insight: Largest-magnitude coefficients combine structural and location effects (for example `GrLivArea`, `OverallQual`, and neighborhood indicators), with clear positive/negative signs.

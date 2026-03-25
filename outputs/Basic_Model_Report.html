@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Basic Model Report</title>
+<style>
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;line-height:1.6;color:#111;max-width:980px;margin:2rem auto;padding:0 1rem;}
+pre{background:#f5f5f5;border:1px solid #ddd;border-radius:6px;padding:.9rem;overflow-x:auto;}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+table{border-collapse:collapse;width:100%;margin:.7rem 0 1.2rem;}
+th,td{border:1px solid #ddd;padding:.5rem .6rem;text-align:left;font-size:.95rem;}
+th{background:#f3f4f6;}
+img{max-width:100%;border:1px solid #ddd;border-radius:4px;}
+</style>
+</head>
+<body>
+<h1>Basic Model Report</h1>
+<p><strong>This basic model follows the course specification: use all available explanatory variables in a single multiple linear regression.</strong></p>
+<h2>Model Specification</h2>
+<p>The housing group estimates:</p>
+<pre><code>y_i = beta_0 + beta_X X_i + beta_D D_i + U_i</code></pre>
+<ul>
+<li>Dependent variable: <code>SalePrice</code>.</li>
+<li><code>X_i</code>: matrix of numerical house characteristics.</li>
+<li><code>D_i</code>: matrix of dummy variables for categorical house characteristics.</li>
+<li>Sample split: 80% in-sample / 20% out-of-sample.</li>
+<li>All available variables are used: <strong>79</strong> raw predictors before encoding.</li>
+</ul>
+<h2>1) Coding (Core Basic Pipeline)</h2>
+<pre><code>from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import KFold, cross_val_score, train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+
+preprocessor = ColumnTransformer([
+    (&quot;num&quot;, Pipeline([
+        (&quot;imputer&quot;, SimpleImputer(strategy=&quot;median&quot;)),
+    ]), numeric_cols),
+    (&quot;cat&quot;, Pipeline([
+        (&quot;imputer&quot;, SimpleImputer(strategy=&quot;most_frequent&quot;)),
+        (&quot;onehot&quot;, OneHotEncoder(handle_unknown=&quot;ignore&quot;, drop=&quot;first&quot;)),
+    ]), categorical_cols),
+])
+
+model = Pipeline([
+    (&quot;preprocessor&quot;, preprocessor),
+    (&quot;linear&quot;, LinearRegression()),
+])</code></pre>
+<h2>2) Regression Equation</h2>
+<p>General form:</p>
+<ul>
+<li>SalePrice_i = beta_0 + beta_X X_i + beta_D D_i + U_i</li>
+</ul>
+<p>Expanded with top 10 coefficients by absolute magnitude:</p>
+<pre><code>SalePrice_hat = -258120.179 + 42782.755 * cat__Neighborhood_StoneBr + 41229.380 * cat__Neighborhood_NoRidge + 30686.871 * cat__LandContour_HLS + 29048.180 * cat__Neighborhood_NridgHt - 28103.831 * cat__PoolQC_Gd - 27100.056 * cat__BsmtQual_Gd - 26801.897 * cat__Condition2_PosN - 25601.093 * cat__KitchenQual_Gd + 25076.222 * cat__Exterior2nd_ImStucc - 24749.904 * cat__BsmtQual_TA</code></pre>
+<h2>3) Regression Result</h2>
+<ul>
+<li>Intercept: <strong>-258120.179</strong></li>
+<li>Predictors before encoding: <strong>79</strong></li>
+<li>Predictors after encoding: <strong>242</strong></li>
+<li>Full coefficient table: <code>outputs/basic_model_coefficients.csv</code></li>
+</ul>
+<p>Top 10 coefficients by absolute magnitude:</p>
+<table><thead><tr><th>rank</th><th>feature</th><th>coefficient</th></tr></thead><tbody><tr><td>1</td><td>cat__Neighborhood_StoneBr</td><td>42782.754705</td></tr><tr><td>2</td><td>cat__Neighborhood_NoRidge</td><td>41229.379903</td></tr><tr><td>3</td><td>cat__LandContour_HLS</td><td>30686.871366</td></tr><tr><td>4</td><td>cat__Neighborhood_NridgHt</td><td>29048.180250</td></tr><tr><td>5</td><td>cat__PoolQC_Gd</td><td>-28103.831335</td></tr><tr><td>6</td><td>cat__BsmtQual_Gd</td><td>-27100.056170</td></tr><tr><td>7</td><td>cat__Condition2_PosN</td><td>-26801.897154</td></tr><tr><td>8</td><td>cat__KitchenQual_Gd</td><td>-25601.092962</td></tr><tr><td>9</td><td>cat__Exterior2nd_ImStucc</td><td>25076.222500</td></tr><tr><td>10</td><td>cat__BsmtQual_TA</td><td>-24749.904022</td></tr></tbody></table>
+<h3>Coefficient interpretation</h3>
+<ul>
+<li>Numeric coefficients are in raw dollar units per one-unit increase in the corresponding numeric feature, holding the other included regressors fixed.</li>
+<li>Dummy coefficients are measured relative to the omitted baseline category because one-hot encoding uses <code>drop=&#x27;first&#x27;</code>.</li>
+<li>These coefficients are descriptive associations in a high-dimensional linear model and should not be interpreted causally.</li>
+</ul>
+<h2>4) Graph: Predicted vs Actual</h2>
+<p><img src="basic_pred_vs_actual.png" alt="Basic Linear Model Predicted vs Actual" /></p>
+<h2>5) RMSE</h2>
+<p>Dollar-scale error formulas:</p>
+<ul>
+<li>RMSE = sqrt((1/n) * sum((y_i - y_hat_i)^2))</li>
+<li>MAE = (1/n) * sum(abs(y_i - y_hat_i))</li>
+</ul>
+<p>Summary metrics:</p>
+<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody><tr><td>holdout_rmse_dollar</td><td>30995.62</td></tr><tr><td>holdout_mae_dollar</td><td>20056.14</td></tr><tr><td>cv_rmse_dollar_mean</td><td>34396.29</td></tr><tr><td>cv_rmse_dollar_std</td><td>11516.43</td></tr><tr><td>number_of_predictors_after_encoding</td><td>242</td></tr></tbody></table>
+<ul>
+<li>5-fold CV RMSE (dollar, folds): 30991.41, 28818.45, 53756.59, 34645.29, 23769.72</li>
+</ul>
+<h2>Notes</h2>
+<ul>
+<li>This is the basic all-variables linear specification required before any feature selection or regularization improvement.</li>
+<li>The Lasso report remains the improved model; this report is the full-variable baseline.</li>
+</ul>
+</body>
+</html>
