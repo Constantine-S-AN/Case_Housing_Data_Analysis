@@ -5,6 +5,7 @@
   "selected_model_reason": "Filtered CV RMSE improved by 35.85%; choose filtered model.",
   "holdout_rmse": 0.09906781847757751,
   "holdout_rmse_log": 0.09906781847757751,
+  "holdout_r2_log": 0.9347556807133669,
   "cv_rmse": 0.0917805188666428,
   "cv_rmse_log_mean": 0.0917805188666428,
   "cv_rmse_log_std": 0.004804836651411374,
@@ -20,6 +21,77 @@
   "typical_relative_error": 0.10414117819351142,
   "best_alpha": 0.00030808085652336175,
   "nonzero_count": 118,
+  "nonzero_share": 0.42142857142857143,
+  "saleprice_skew_raw": 1.8828757597682129,
+  "saleprice_skew_log": 0.12134661989685329,
+  "residual_summary": {
+    "residual_mean_log": -0.004766394883654276,
+    "residual_median_log": -0.00013151648524356574,
+    "residual_abs_p90_log": 0.15917029401166652,
+    "residual_corr_with_predicted_log": 0.0051537385531916415
+  },
+  "price_band_errors": [
+    {
+      "price_band": "Q1",
+      "n": 70,
+      "median_actual_price": 109999.99999999991,
+      "mae_dollar": 10696.01316512291,
+      "mape": 0.10418257941873062
+    },
+    {
+      "price_band": "Q2",
+      "n": 70,
+      "median_actual_price": 146250.0,
+      "mae_dollar": 8773.677862234003,
+      "mape": 0.058571021238274235
+    },
+    {
+      "price_band": "Q3",
+      "n": 68,
+      "median_actual_price": 185750.00000000006,
+      "mae_dollar": 11318.883752610469,
+      "mape": 0.060254530275466706
+    },
+    {
+      "price_band": "Q4",
+      "n": 69,
+      "median_actual_price": 265978.9999999998,
+      "mae_dollar": 22147.781050497706,
+      "mape": 0.07842359577772486
+    }
+  ],
+  "model_family_comparison": [
+    {
+      "model": "LassoCV",
+      "cv_rmse_log_mean": 0.0917805188666428,
+      "cv_rmse_log_std": 0.004804836651411374
+    },
+    {
+      "model": "RidgeCV",
+      "cv_rmse_log_mean": 0.09270701341267677,
+      "cv_rmse_log_std": 0.004377904092289985
+    },
+    {
+      "model": "LinearRegression",
+      "cv_rmse_log_mean": 0.10098778739344824,
+      "cv_rmse_log_std": 0.0048135330955760575
+    }
+  ],
+  "feature_set_comparison": [
+    {
+      "feature_set": "Original cleaned features",
+      "n_features_before_encoding": 79,
+      "cv_rmse_log_mean": 0.0917805188666428,
+      "cv_rmse_log_std": 0.004804836651411374
+    },
+    {
+      "feature_set": "Original + TotalSF + HouseAge + RemodAge + TotalBath",
+      "n_features_before_encoding": 83,
+      "cv_rmse_log_mean": 0.09181655027588095,
+      "cv_rmse_log_std": 0.004714807734201497
+    }
+  ],
+  "feature_set_recommendation": "Engineered features were tested but not retained because they did not improve cross-validated RMSE.",
   "cooks_distance_threshold_4_over_n": 0.0027397260273972603,
   "influential_points_count": 78,
   "n_rows_total": 1460,
