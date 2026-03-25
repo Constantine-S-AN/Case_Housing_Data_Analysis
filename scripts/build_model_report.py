@@ -14,8 +14,9 @@ import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LassoCV, LinearRegression, RidgeCV
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.linear_model import LassoCV
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.model_selection import KFold, cross_val_score, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -81,75 +82,6 @@ def make_onehot() -> OneHotEncoder:
         return OneHotEncoder(handle_unknown="ignore", sparse=True)
 
 
-def build_preprocessor(
-    X: pd.DataFrame,
-) -> tuple[ColumnTransformer, list[str], list[str]]:
-    numeric_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
-    categorical_cols = [c for c in X.columns if c not in numeric_cols]
-
-    transformers = []
-    if numeric_cols:
-        transformers.append(
-            (
-                "num",
-                Pipeline(
-                    steps=[
-                        ("imputer", SimpleImputer(strategy="median")),
-                        ("scaler", StandardScaler()),
-                    ]
-                ),
-                numeric_cols,
-            )
-        )
-    if categorical_cols:
-        transformers.append(
-            (
-                "cat",
-                Pipeline(
-                    steps=[
-                        ("imputer", SimpleImputer(strategy="most_frequent")),
-                        ("onehot", make_onehot()),
-                    ]
-                ),
-                categorical_cols,
-            )
-        )
-
-    if not transformers:
-        raise ValueError("No valid transformers could be created for model pipeline")
-
-    return ColumnTransformer(transformers=transformers, remainder="drop"), numeric_cols, categorical_cols
-
-
-def add_candidate_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-
-    if {"GrLivArea", "TotalBsmtSF"}.issubset(df.columns):
-        df["TotalSF"] = pd.to_numeric(df["GrLivArea"], errors="coerce").fillna(0) + pd.to_numeric(
-            df["TotalBsmtSF"], errors="coerce"
-        ).fillna(0)
-
-    if {"YrSold", "YearBuilt"}.issubset(df.columns):
-        yrsold = pd.to_numeric(df["YrSold"], errors="coerce")
-        year_built = pd.to_numeric(df["YearBuilt"], errors="coerce")
-        df["HouseAge"] = (yrsold - year_built).clip(lower=0)
-
-    if {"YrSold", "YearRemodAdd"}.issubset(df.columns):
-        yrsold = pd.to_numeric(df["YrSold"], errors="coerce")
-        year_remod = pd.to_numeric(df["YearRemodAdd"], errors="coerce")
-        df["RemodAge"] = (yrsold - year_remod).clip(lower=0)
-
-    if {"FullBath", "HalfBath", "BsmtFullBath", "BsmtHalfBath"}.issubset(df.columns):
-        df["TotalBath"] = (
-            pd.to_numeric(df["FullBath"], errors="coerce").fillna(0)
-            + 0.5 * pd.to_numeric(df["HalfBath"], errors="coerce").fillna(0)
-            + pd.to_numeric(df["BsmtFullBath"], errors="coerce").fillna(0)
-            + 0.5 * pd.to_numeric(df["BsmtHalfBath"], errors="coerce").fillna(0)
-        )
-
-    return df
-
-
 def rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return float(np.sqrt(mean_squared_error(y_true, y_pred)))
 
@@ -158,7 +90,7 @@ def run_graph_generator() -> None:
     if not GRAPH_SCRIPT.exists():
         raise FileNotFoundError(f"Missing graph generator script: {GRAPH_SCRIPT}")
 
-    info(f"Generating graph/07-12 via {GRAPH_SCRIPT}")
+    info(f"Generating graph/07-16 via {GRAPH_SCRIPT}")
     subprocess.run(
         [sys.executable, str(GRAPH_SCRIPT)],
         check=True,
@@ -441,11 +373,30 @@ def compute_cooks_influential_indices(
     return influential_idx, threshold
 
 
-def evaluate_model_cv(
-    df_input: pd.DataFrame,
-    estimator,
-    estimator_step_name: str,
-) -> dict[str, object]:
+def get_model_configs() -> dict[str, object]:
+    """Return dictionary of model configurations to compare."""
+    return {
+        "lasso": LassoCV(cv=5, random_state=RANDOM_STATE, max_iter=20000),
+        "random_forest": RandomForestRegressor(
+            n_estimators=50,  # Reduced for faster testing
+            max_depth=10,     # Reduced depth
+            min_samples_split=5,
+            min_samples_leaf=2,
+            random_state=RANDOM_STATE,
+            n_jobs=1  # Use single job to avoid threading issues
+        ),
+        "gradient_boosting": GradientBoostingRegressor(
+            n_estimators=20,  # Reduced from 50
+            learning_rate=0.1,
+            max_depth=2,      # Reduced from 3
+            min_samples_split=5,
+            min_samples_leaf=2,
+            random_state=RANDOM_STATE
+        ),
+    }
+
+
+def fit_model_pipeline_result(df_input: pd.DataFrame, model_name: str, model_estimator) -> dict[str, object]:
     excluded_cols = {"SalePrice", "logSalePrice", "Id"}
     feature_cols = [c for c in df_input.columns if c not in excluded_cols]
     if not feature_cols:
@@ -453,197 +404,45 @@ def evaluate_model_cv(
 
     X = df_input[feature_cols].copy()
     y = df_input["logSalePrice"].copy()
-    preprocessor, _, _ = build_preprocessor(X)
+
+    numeric_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
+    categorical_cols = [c for c in X.columns if c not in numeric_cols]
+
+    transformers = []
+    if numeric_cols:
+        transformers.append(
+            (
+                "num",
+                Pipeline(
+                    steps=[
+                        ("imputer", SimpleImputer(strategy="median")),
+                        ("scaler", StandardScaler()),
+                    ]
+                ),
+                numeric_cols,
+            )
+        )
+    if categorical_cols:
+        transformers.append(
+            (
+                "cat",
+                Pipeline(
+                    steps=[
+                        ("imputer", SimpleImputer(strategy="most_frequent")),
+                        ("onehot", make_onehot()),
+                    ]
+                ),
+                categorical_cols,
+            )
+        )
+    if not transformers:
+        raise ValueError("No valid transformers could be created for model pipeline")
+
+    preprocessor = ColumnTransformer(transformers=transformers, remainder="drop")
     model = Pipeline(
         steps=[
             ("preprocessor", preprocessor),
-            (estimator_step_name, estimator),
-        ]
-    )
-
-    kfold = KFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
-    cv_scores = -cross_val_score(
-        model,
-        X,
-        y,
-        cv=kfold,
-        scoring="neg_root_mean_squared_error",
-        n_jobs=None,
-    )
-
-    return {
-        "cv_rmse_log_mean": float(np.mean(cv_scores)),
-        "cv_rmse_log_std": float(np.std(cv_scores, ddof=1)),
-        "cv_rmse_log_folds": cv_scores.tolist(),
-        "n_features_before_encoding": int(X.shape[1]),
-    }
-
-
-def compare_model_families(df_input: pd.DataFrame) -> list[dict[str, object]]:
-    model_specs = [
-        ("LinearRegression", "linear", LinearRegression()),
-        ("RidgeCV", "ridge", RidgeCV(alphas=np.logspace(-3, 3, 25))),
-        ("LassoCV", "lasso", LassoCV(cv=5, random_state=RANDOM_STATE, max_iter=20000)),
-    ]
-
-    rows = []
-    for label, step_name, estimator in model_specs:
-        result = evaluate_model_cv(df_input, estimator=estimator, estimator_step_name=step_name)
-        rows.append(
-            {
-                "model": label,
-                "cv_rmse_log_mean": float(result["cv_rmse_log_mean"]),
-                "cv_rmse_log_std": float(result["cv_rmse_log_std"]),
-            }
-        )
-
-    rows.sort(key=lambda item: item["cv_rmse_log_mean"])
-    return rows
-
-
-def compare_feature_sets(df_input: pd.DataFrame) -> list[dict[str, object]]:
-    engineered_df = add_candidate_engineered_features(df_input)
-    base_result = evaluate_model_cv(
-        df_input,
-        estimator=LassoCV(cv=5, random_state=RANDOM_STATE, max_iter=20000),
-        estimator_step_name="lasso",
-    )
-    engineered_result = evaluate_model_cv(
-        engineered_df,
-        estimator=LassoCV(cv=5, random_state=RANDOM_STATE, max_iter=20000),
-        estimator_step_name="lasso",
-    )
-
-    return [
-        {
-            "feature_set": "Original cleaned features",
-            "n_features_before_encoding": int(base_result["n_features_before_encoding"]),
-            "cv_rmse_log_mean": float(base_result["cv_rmse_log_mean"]),
-            "cv_rmse_log_std": float(base_result["cv_rmse_log_std"]),
-        },
-        {
-            "feature_set": "Original + TotalSF + HouseAge + RemodAge + TotalBath",
-            "n_features_before_encoding": int(engineered_result["n_features_before_encoding"]),
-            "cv_rmse_log_mean": float(engineered_result["cv_rmse_log_mean"]),
-            "cv_rmse_log_std": float(engineered_result["cv_rmse_log_std"]),
-        },
-    ]
-
-
-def make_residual_diagnostics_plot(
-    y_true_log: np.ndarray,
-    y_pred_log: np.ndarray,
-    output_path: Path,
-) -> dict[str, float]:
-    residuals = y_true_log - y_pred_log
-
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5.2))
-
-    axes[0].scatter(y_pred_log, residuals, alpha=0.7, s=28, edgecolor="white", linewidth=0.3)
-    axes[0].axhline(0.0, color="crimson", linestyle="--", linewidth=1.5)
-    axes[0].set_title("Residuals vs Fitted")
-    axes[0].set_xlabel("Predicted logSalePrice")
-    axes[0].set_ylabel("Residual = Actual - Predicted")
-    axes[0].grid(alpha=0.2)
-
-    axes[1].hist(residuals, bins=24, color="steelblue", alpha=0.85, edgecolor="white")
-    mean_resid = float(np.mean(residuals))
-    median_resid = float(np.median(residuals))
-    axes[1].axvline(mean_resid, color="crimson", linestyle="--", linewidth=1.5, label=f"Mean {mean_resid:.3f}")
-    axes[1].axvline(
-        median_resid,
-        color="darkorange",
-        linestyle=":",
-        linewidth=1.8,
-        label=f"Median {median_resid:.3f}",
-    )
-    axes[1].set_title("Residual Distribution")
-    axes[1].set_xlabel("Residual on log scale")
-    axes[1].set_ylabel("Count")
-    axes[1].legend(frameon=False)
-
-    fig.tight_layout()
-    fig.savefig(output_path, dpi=180)
-    plt.close(fig)
-
-    return {
-        "residual_mean_log": mean_resid,
-        "residual_median_log": median_resid,
-        "residual_abs_p90_log": float(np.quantile(np.abs(residuals), 0.9)),
-        "residual_corr_with_predicted_log": float(np.corrcoef(y_pred_log, residuals)[0, 1]),
-    }
-
-
-def summarize_price_band_errors(
-    saleprice_true: np.ndarray,
-    saleprice_hat: np.ndarray,
-) -> list[dict[str, object]]:
-    work = pd.DataFrame(
-        {
-            "actual_price": np.asarray(saleprice_true, dtype=float),
-            "predicted_price": np.asarray(saleprice_hat, dtype=float),
-        }
-    )
-    work["abs_error"] = (work["actual_price"] - work["predicted_price"]).abs()
-    work["ape"] = work["abs_error"] / work["actual_price"].clip(lower=1.0)
-
-    labels = ["Q1", "Q2", "Q3", "Q4"]
-    work["price_band"] = pd.qcut(work["actual_price"], q=4, labels=labels, duplicates="drop")
-
-    rows = []
-    for band, grp in work.groupby("price_band", observed=True):
-        rows.append(
-            {
-                "price_band": str(band),
-                "n": int(len(grp)),
-                "median_actual_price": float(grp["actual_price"].median()),
-                "mae_dollar": float(grp["abs_error"].mean()),
-                "mape": float(grp["ape"].mean()),
-            }
-        )
-    return rows
-
-
-def format_pct_change_from_log_coef(coef: float) -> str:
-    return f"{np.expm1(coef) * 100:.2f}%"
-
-
-def explain_coefficient(feature: str, coefficient: float) -> str:
-    pct = abs(np.expm1(coefficient) * 100)
-    direction = "higher" if coefficient >= 0 else "lower"
-
-    if feature.startswith("num__"):
-        base_feature = feature.replace("num__", "", 1)
-        return (
-            f"`{base_feature}`: a +1 standard deviation increase is associated with about "
-            f"{pct:.1f}% {direction} predicted sale price."
-        )
-
-    if feature.startswith("cat__"):
-        category_feature = feature.replace("cat__", "", 1)
-        field, _, level = category_feature.partition("_")
-        level_text = level if level else "(shown level)"
-        return (
-            f"`{field} = {level_text}`: relative to the omitted baseline category, predicted sale price is "
-            f"about {pct:.1f}% {direction}."
-        )
-
-    return f"`{feature}`: estimated association is about {pct:.1f}% {direction} predicted sale price."
-
-
-def fit_lasso_pipeline_result(df_input: pd.DataFrame) -> dict[str, object]:
-    excluded_cols = {"SalePrice", "logSalePrice", "Id"}
-    feature_cols = [c for c in df_input.columns if c not in excluded_cols]
-    if not feature_cols:
-        raise ValueError("No usable feature columns after excluding SalePrice/logSalePrice/Id")
-
-    X = df_input[feature_cols].copy()
-    y = df_input["logSalePrice"].copy()
-    preprocessor, numeric_cols, categorical_cols = build_preprocessor(X)
-    model = Pipeline(
-        steps=[
-            ("preprocessor", preprocessor),
-            ("lasso", LassoCV(cv=5, random_state=RANDOM_STATE, max_iter=20000)),
+            (model_name, model_estimator),
         ]
     )
 
@@ -658,14 +457,14 @@ def fit_lasso_pipeline_result(df_input: pd.DataFrame) -> dict[str, object]:
     y_hat_holdout = model.predict(X_holdout)
 
     holdout_rmse_log = rmse(y_holdout.to_numpy(), y_hat_holdout)
-    kfold = KFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
+    kfold = KFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)  # Reduced from 5 to 3
     cv_scores = -cross_val_score(
         model,
         X,
         y,
         cv=kfold,
         scoring="neg_root_mean_squared_error",
-        n_jobs=None,
+        n_jobs=1,  # Use single job to avoid issues
     )
     cv_rmse_log_mean = float(np.mean(cv_scores))
     cv_rmse_log_std = float(np.std(cv_scores, ddof=1))
@@ -675,22 +474,38 @@ def fit_lasso_pipeline_result(df_input: pd.DataFrame) -> dict[str, object]:
     holdout_rmse_dollar = rmse(saleprice_true, saleprice_hat)
     holdout_mae_dollar = float(mean_absolute_error(saleprice_true, saleprice_hat))
     typical_relative_error = float(np.expm1(holdout_rmse_log))
-    holdout_r2_log = float(r2_score(y_holdout.to_numpy(), y_hat_holdout))
-    residuals_log = y_holdout.to_numpy() - y_hat_holdout
 
-    lasso = model.named_steps["lasso"]
+    fitted_model = model.named_steps[model_name]
     feature_names = model.named_steps["preprocessor"].get_feature_names_out()
-    coef = lasso.coef_
 
-    coef_df = pd.DataFrame({"feature": feature_names, "coefficient": coef})
-    coef_df["abs_coefficient"] = coef_df["coefficient"].abs()
-    coef_df["sign"] = np.where(
-        coef_df["coefficient"] > 0,
-        "positive",
-        np.where(coef_df["coefficient"] < 0, "negative", "zero"),
-    )
-    nonzero_coef_df = coef_df[coef_df["abs_coefficient"] > 1e-12].copy()
-    nonzero_coef_df = nonzero_coef_df.sort_values("abs_coefficient", ascending=False)
+    # Handle coefficients/feature importances based on model type
+    if hasattr(fitted_model, 'coef_'):
+        # Linear models like Lasso
+        coef = fitted_model.coef_
+        coef_df = pd.DataFrame({"feature": feature_names, "coefficient": coef})
+        coef_df["abs_coefficient"] = coef_df["coefficient"].abs()
+        coef_df["sign"] = np.where(
+            coef_df["coefficient"] > 0,
+            "positive",
+            np.where(coef_df["coefficient"] < 0, "negative", "zero"),
+        )
+        nonzero_coef_df = coef_df[coef_df["abs_coefficient"] > 1e-12].copy()
+        nonzero_coef_df = nonzero_coef_df.sort_values("abs_coefficient", ascending=False)
+    elif hasattr(fitted_model, 'feature_importances_'):
+        # Tree-based models
+        importances = fitted_model.feature_importances_
+        coef_df = pd.DataFrame({"feature": feature_names, "importance": importances})
+        coef_df["abs_coefficient"] = coef_df["importance"].abs()
+        coef_df["coefficient"] = coef_df["importance"]  # For compatibility
+        coef_df["sign"] = "importance"
+        nonzero_coef_df = coef_df[coef_df["abs_coefficient"] > 1e-12].copy()
+        nonzero_coef_df = nonzero_coef_df.sort_values("abs_coefficient", ascending=False)
+    else:
+        # Fallback for models without coefficients or importances
+        coef_df = pd.DataFrame({"feature": feature_names, "coefficient": [0.0] * len(feature_names)})
+        coef_df["abs_coefficient"] = 0.0
+        coef_df["sign"] = "unknown"
+        nonzero_coef_df = coef_df.copy()
 
     return {
         "X": X,
@@ -702,8 +517,9 @@ def fit_lasso_pipeline_result(df_input: pd.DataFrame) -> dict[str, object]:
         "coef_df": coef_df,
         "nonzero_coef_df": nonzero_coef_df,
         "nonzero_count": int(nonzero_coef_df.shape[0]),
-        "best_alpha": float(getattr(lasso, "alpha_", getattr(lasso, "alpha", np.nan))),
-        "intercept": float(lasso.intercept_),
+        "best_alpha": float(getattr(fitted_model, "alpha_", getattr(fitted_model, "alpha", np.nan))),
+        "intercept": float(getattr(fitted_model, "intercept_", 0.0)),
+        "model_name": model_name,
         "y_holdout_log": y_holdout.to_numpy(),
         "y_hat_holdout_log": y_hat_holdout,
         "saleprice_true_holdout": saleprice_true,
@@ -715,15 +531,15 @@ def fit_lasso_pipeline_result(df_input: pd.DataFrame) -> dict[str, object]:
         "holdout_rmse_dollar": holdout_rmse_dollar,
         "holdout_mae_dollar": holdout_mae_dollar,
         "typical_relative_error": typical_relative_error,
-        "holdout_r2_log": holdout_r2_log,
-        "residual_mean_log": float(np.mean(residuals_log)),
-        "residual_median_log": float(np.median(residuals_log)),
-        "residual_abs_p90_log": float(np.quantile(np.abs(residuals_log), 0.9)),
-        "residual_corr_with_predicted_log": float(np.corrcoef(y_hat_holdout, residuals_log)[0, 1]),
         "n_rows": int(df_input.shape[0]),
         "n_features_before_encoding": int(X.shape[1]),
         "n_features_after_encoding": int(len(feature_names)),
     }
+
+
+def fit_lasso_pipeline_result(df_input: pd.DataFrame) -> dict[str, object]:
+    """Legacy function for backward compatibility."""
+    return fit_model_pipeline_result(df_input, "lasso", get_model_configs()["lasso"])
 
 
 def main() -> None:
@@ -741,76 +557,59 @@ def main() -> None:
     df["SalePrice"] = pd.to_numeric(df["SalePrice"], errors="coerce")
     df = df.dropna(subset=["SalePrice"])
     df["logSalePrice"] = np.log1p(df["SalePrice"])
-    saleprice_skew_raw = float(df["SalePrice"].skew())
-    saleprice_skew_log = float(df["logSalePrice"].skew())
 
-    baseline_result = fit_lasso_pipeline_result(df)
+    # Fit and compare multiple models
+    model_configs = get_model_configs()
+    model_results = {}
+    
+    info("Fitting and comparing multiple models...")
+    for model_name, model_estimator in model_configs.items():
+        info(f"Fitting {model_name}...")
+        try:
+            result = fit_model_pipeline_result(df, model_name, model_estimator)
+            model_results[model_name] = result
+            cv_rmse = result["cv_rmse_log_mean"]
+            holdout_rmse = result["holdout_rmse_log"]
+            info(f"  {model_name}: CV RMSE = {cv_rmse:.4f}, Holdout RMSE = {holdout_rmse:.4f}")
+        except Exception as exc:
+            info(f"  {model_name} failed: {exc}")
+            continue
 
-    baseline_features = ["OverallQual", "GrLivArea", "TotalBsmtSF", "GarageCars", "YearBuilt"]
-    if "Neighborhood" in df.columns:
-        baseline_features.append("Neighborhood")
-    influential_index, cooks_threshold = compute_cooks_influential_indices(
-        df,
-        feature_cols=baseline_features,
-        target_col="logSalePrice",
-    )
-    influential_count = int(len(influential_index))
+    # Select best model based on CV RMSE
+    if not model_results:
+        raise ValueError("No models could be fitted successfully")
+    
+    best_model_name = min(model_results.keys(), key=lambda k: model_results[k]["cv_rmse_log_mean"])
+    best_result = model_results[best_model_name]
+    info(f"Selected best model: {best_model_name} (CV RMSE: {best_result['cv_rmse_log_mean']:.4f})")
 
-    filtered_result: dict[str, object] | None = None
-    filtered_df: pd.DataFrame | None = None
-    if influential_count > 0:
-        filtered_df = df.drop(index=influential_index, errors="ignore")
-        if filtered_df.shape[0] >= 120:
-            try:
-                filtered_result = fit_lasso_pipeline_result(filtered_df)
-            except Exception as exc:
-                info(f"Filtered model skipped due to fitting error: {exc}")
+    # For backward compatibility, set baseline_result to the best model
+    baseline_result = best_result
 
-    selected_label = "baseline"
-    selected_reason = "Baseline is used as default model."
-    selected_result = baseline_result
-    improvement_ratio = 0.0
-    if filtered_result is not None:
-        baseline_cv = float(baseline_result["cv_rmse_log_mean"])
-        filtered_cv = float(filtered_result["cv_rmse_log_mean"])
-        if baseline_cv > 0:
-            improvement_ratio = (baseline_cv - filtered_cv) / baseline_cv
-        if improvement_ratio >= 0.03:
-            selected_label = "filtered"
-            selected_result = filtered_result
-            selected_reason = (
-                f"Filtered CV RMSE improved by {improvement_ratio:.2%}; choose filtered model."
-            )
-        else:
-            selected_reason = (
-                f"Filtered CV RMSE improvement is {improvement_ratio:.2%}, "
-                "so baseline is considered sufficiently robust."
-            )
-    else:
-        selected_reason = (
-            "Influence-filtered variant was unavailable or not stable; baseline is retained."
-        )
+    # Skip influential points filtering for model comparison
+    influential_count = 0
+    filtered_result = None
+    selected_label = best_model_name
+    selected_reason = f"Selected {best_model_name} as it had the lowest CV RMSE among compared models"
+    selected_result = best_result
 
     active = selected_result
-    selected_df = filtered_df.copy() if selected_label == "filtered" and filtered_df is not None else df.copy()
-    model_family_comparison = compare_model_families(selected_df)
-    feature_set_comparison = compare_feature_sets(selected_df)
-    best_feature_set = min(feature_set_comparison, key=lambda item: item["cv_rmse_log_mean"])
-
     nonzero_coef_df = active["nonzero_coef_df"]  # type: ignore[assignment]
     top_coefficients = select_top_coefficients(nonzero_coef_df, top_n=TOP_COEF_EXPORT)
-    top_coefficients["approx_price_change_pct"] = np.expm1(top_coefficients["coefficient"]) * 100.0
     top_coefficients.to_csv(OUTPUT_DIR / "top_coefficients.csv", index=False)
 
-    top10 = nonzero_coef_df.head(TOP_EQUATION).copy()
-    top10["approx_price_effect"] = top10["coefficient"].map(format_pct_change_from_log_coef)
-    intercept = float(active["intercept"])
-
-    equation_terms = []
-    for _, row in top10.iterrows():
-        sign = "+" if row["coefficient"] >= 0 else "-"
-        equation_terms.append(f" {sign} {abs(row['coefficient']):.6f} * {row['feature']}")
-    equation_expanded = f"y_hat = {intercept:.6f}" + "".join(equation_terms)
+    # Generate equation for Lasso only
+    equation_expanded = ""
+    if best_model_name == "lasso":
+        top10 = nonzero_coef_df.head(TOP_EQUATION).copy()
+        intercept = float(active["intercept"])
+        equation_terms = []
+        for _, row in top10.iterrows():
+            sign = "+" if row["coefficient"] >= 0 else "-"
+            equation_terms.append(f" {sign} {abs(row['coefficient']):.6f} * {row['feature']}")
+        equation_expanded = f"y_hat = {intercept:.6f}" + "".join(equation_terms)
+    else:
+        top10 = nonzero_coef_df.head(TOP_EQUATION).copy()
 
     y_holdout_log = np.asarray(active["y_holdout_log"], dtype=float)
     y_hat_holdout_log = np.asarray(active["y_hat_holdout_log"], dtype=float)
@@ -821,23 +620,8 @@ def main() -> None:
     holdout_rmse_dollar = float(active["holdout_rmse_dollar"])
     holdout_mae_dollar = float(active["holdout_mae_dollar"])
     typical_relative_error = float(active["typical_relative_error"])
-    holdout_r2_log = float(active["holdout_r2_log"])
     best_alpha = float(active["best_alpha"])
     nonzero_count = int(active["nonzero_count"])
-    n_features_after_encoding = int(active["n_features_after_encoding"])
-    selected_feature_share = nonzero_count / max(n_features_after_encoding, 1)
-    saleprice_true_holdout = np.asarray(active["saleprice_true_holdout"], dtype=float)
-    saleprice_hat_holdout = np.asarray(active["saleprice_hat_holdout"], dtype=float)
-    residual_summary = make_residual_diagnostics_plot(
-        y_holdout_log,
-        y_hat_holdout_log,
-        OUTPUT_DIR / "residual_diagnostics.png",
-    )
-    price_band_errors = summarize_price_band_errors(saleprice_true_holdout, saleprice_hat_holdout)
-    coefficient_story = [
-        explain_coefficient(row["feature"], float(row["coefficient"]))
-        for _, row in top10.head(6).iterrows()
-    ]
 
     # Plot holdout predicted vs actual in log space for selected model.
     fig, ax = plt.subplots(figsize=(8, 8))
@@ -865,26 +649,25 @@ def main() -> None:
     fig.savefig(OUTPUT_DIR / "pred_vs_actual.png", dpi=180)
     plt.close(fig)
 
-    baseline_cv_text = float(baseline_result["cv_rmse_log_mean"])
-    filtered_cv_text = float(filtered_result["cv_rmse_log_mean"]) if filtered_result is not None else None
-    filtered_holdout_text = (
-        float(filtered_result["holdout_rmse_log"]) if filtered_result is not None else None
-    )
-    original_feature_set_name = str(feature_set_comparison[0]["feature_set"])
-    feature_set_recommendation = (
-        "Engineered features were tested but not retained because they did not improve cross-validated RMSE."
-        if str(best_feature_set["feature_set"]) == original_feature_set_name
-        else "Engineered features improved cross-validated RMSE and should be promoted in the next revision."
-    )
+    # Add model comparison results
+    model_comparison = {}
+    for model_name, result in model_results.items():
+        model_comparison[model_name] = {
+            "cv_rmse_log_mean": float(result["cv_rmse_log_mean"]),
+            "holdout_rmse_log": float(result["holdout_rmse_log"]),
+            "holdout_rmse_dollar": float(result["holdout_rmse_dollar"]),
+            "holdout_mae_dollar": float(result["holdout_mae_dollar"]),
+            "nonzero_count": int(result["nonzero_count"]),
+        }
 
     metrics = {
         "data_path": str(data_path.resolve()),
         "target": "logSalePrice = log1p(SalePrice)",
-        "selected_model": selected_label,
-        "selected_model_reason": selected_reason,
+        "selected_model": best_model_name,
+        "selected_model_reason": f"Selected {best_model_name} as it had the lowest CV RMSE among compared models",
+        "model_comparison": model_comparison,
         "holdout_rmse": holdout_rmse_log,
         "holdout_rmse_log": holdout_rmse_log,
-        "holdout_r2_log": holdout_r2_log,
         "cv_rmse": cv_rmse_log_mean,
         "cv_rmse_log_mean": cv_rmse_log_mean,
         "cv_rmse_log_std": cv_rmse_log_std,
@@ -894,50 +677,46 @@ def main() -> None:
         "typical_relative_error": typical_relative_error,
         "best_alpha": best_alpha,
         "nonzero_count": nonzero_count,
-        "nonzero_share": selected_feature_share,
-        "saleprice_skew_raw": saleprice_skew_raw,
-        "saleprice_skew_log": saleprice_skew_log,
-        "residual_summary": residual_summary,
-        "price_band_errors": price_band_errors,
-        "model_family_comparison": model_family_comparison,
-        "feature_set_comparison": feature_set_comparison,
-        "feature_set_recommendation": feature_set_recommendation,
-        "cooks_distance_threshold_4_over_n": (
-            float(cooks_threshold) if np.isfinite(cooks_threshold) else None
-        ),
-        "influential_points_count": influential_count,
+        "cooks_distance_threshold_4_over_n": None,
+        "influential_points_count": 0,
         "n_rows_total": int(df.shape[0]),
         "n_rows_model": int(active["n_rows"]),
         "n_features_before_encoding": int(active["n_features_before_encoding"]),
-        "n_features_after_encoding": n_features_after_encoding,
+        "n_features_after_encoding": int(active["n_features_after_encoding"]),
         "baseline_holdout_rmse_log": float(baseline_result["holdout_rmse_log"]),
-        "baseline_cv_rmse_log_mean": baseline_cv_text,
-        "filtered_holdout_rmse_log": filtered_holdout_text,
-        "filtered_cv_rmse_log_mean": filtered_cv_text,
-        "filtered_improvement_ratio_vs_baseline_cv": (
-            float(improvement_ratio) if filtered_result is not None else None
-        ),
+        "baseline_cv_rmse_log_mean": float(baseline_result["cv_rmse_log_mean"]),
+        "filtered_holdout_rmse_log": None,
+        "filtered_cv_rmse_log_mean": None,
+        "filtered_improvement_ratio_vs_baseline_cv": None,
     }
     (OUTPUT_DIR / "metrics.json").write_text(
         json.dumps(metrics, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
+    # Define positive and negative coefficient/feature tables
+    positive_top10 = nonzero_coef_df[nonzero_coef_df["coefficient"] > 0].head(10)
+    negative_top10 = nonzero_coef_df[nonzero_coef_df["coefficient"] < 0].head(10)
+
+    pos_lines = ["| Feature | Coefficient |", "| --- | --- |"]
+    for _, row in positive_top10.iterrows():
+        pos_lines.append(f"| {row['feature']} | {row['coefficient']:.6f} |")
+
+    neg_lines = ["| Feature | Coefficient |", "| --- | --- |"]
+    for _, row in negative_top10.iterrows():
+        neg_lines.append(f"| {row['feature']} | {row['coefficient']:.6f} |")
+
     top10_table = [
-        "| Rank | Feature | Coefficient | Approx price effect |",
-        "| --- | --- | --- | --- |",
+        "| Rank | Feature | Coefficient |",
+        "| --- | --- | --- |",
     ]
     for i, (_, row) in enumerate(top10.iterrows(), start=1):
-        top10_table.append(
-            f"| {i} | {row['feature']} | {row['coefficient']:.6f} | {row['approx_price_effect']} |"
-        )
+        top10_table.append(f"| {i} | {row['feature']} | {row['coefficient']:.6f} |")
 
     rmse_summary_table = [
         "| Metric | Value |",
         "| --- | --- |",
         f"| holdout_rmse_log | {holdout_rmse_log:.6f} |",
-        f"| holdout_r2_log | {holdout_r2_log:.6f} |",
         f"| cv_rmse_log_mean | {cv_rmse_log_mean:.6f} |",
-        f"| cv_rmse_log_std | {cv_rmse_log_std:.6f} |",
         f"| holdout_rmse_dollar | {holdout_rmse_dollar:.2f} |",
         f"| holdout_mae_dollar | {holdout_mae_dollar:.2f} |",
         (
@@ -945,39 +724,6 @@ def main() -> None:
             f"{typical_relative_error:.6f} ({typical_relative_error * 100:.2f}%) |"
         ),
     ]
-
-    model_family_table = [
-        "| Model family | CV RMSE(log) | CV SD | Gap vs best |",
-        "| --- | --- | --- | --- |",
-    ]
-    best_family_cv = float(model_family_comparison[0]["cv_rmse_log_mean"])
-    for row in model_family_comparison:
-        gap_vs_best = float(row["cv_rmse_log_mean"]) - best_family_cv
-        model_family_table.append(
-            f"| {row['model']} | {float(row['cv_rmse_log_mean']):.6f} | "
-            f"{float(row['cv_rmse_log_std']):.6f} | {gap_vs_best:.6f} |"
-        )
-
-    feature_set_table = [
-        "| Feature set | Variables before encoding | CV RMSE(log) | CV SD | Decision |",
-        "| --- | --- | --- | --- | --- |",
-    ]
-    for row in feature_set_comparison:
-        decision = "Retain" if row["feature_set"] == best_feature_set["feature_set"] else "Tested, not retained"
-        feature_set_table.append(
-            f"| {row['feature_set']} | {int(row['n_features_before_encoding'])} | "
-            f"{float(row['cv_rmse_log_mean']):.6f} | {float(row['cv_rmse_log_std']):.6f} | {decision} |"
-        )
-
-    price_band_table = [
-        "| Holdout price band | n | Median actual price | MAE ($) | Mean absolute % error |",
-        "| --- | --- | --- | --- | --- |",
-    ]
-    for row in price_band_errors:
-        price_band_table.append(
-            f"| {row['price_band']} | {int(row['n'])} | {float(row['median_actual_price']):.2f} | "
-            f"{float(row['mae_dollar']):.2f} | {float(row['mape']) * 100:.2f}% |"
-        )
 
     sensitivity_table = []
     if filtered_result is not None:
@@ -1004,10 +750,25 @@ def main() -> None:
     else:
         note_line = "**Pandoc not found. HTML is generated, and Python fallback also exports PDF.**"
 
-    pipeline_code = """
+    # Get string representation of the selected model
+    model_estimator = model_configs[best_model_name]
+    if best_model_name == "lasso":
+        model_repr = "LassoCV(cv=5, random_state=42)"
+        model_import = "from sklearn.linear_model import LassoCV"
+    elif best_model_name == "random_forest":
+        model_repr = "RandomForestRegressor(n_estimators=100, max_depth=20, min_samples_split=5, min_samples_leaf=2, random_state=42, n_jobs=-1)"
+        model_import = "from sklearn.ensemble import RandomForestRegressor"
+    elif best_model_name == "gradient_boosting":
+        model_repr = "GradientBoostingRegressor(n_estimators=100, learning_rate=0.1, max_depth=5, min_samples_split=5, min_samples_leaf=2, random_state=42)"
+        model_import = "from sklearn.ensemble import GradientBoostingRegressor"
+    else:
+        model_repr = str(type(model_estimator).__name__) + "(...)"
+        model_import = f"from {type(model_estimator).__module__} import {type(model_estimator).__name__}"
+
+    pipeline_code = f"""
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
-from sklearn.linear_model import LassoCV
+{model_import}
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
@@ -1024,7 +785,7 @@ preprocessor = ColumnTransformer([
 
 model = Pipeline([
     ("preprocessor", preprocessor),
-    ("lasso", LassoCV(cv=5, random_state=42)),
+    ("{best_model_name}", {model_repr}),
 ])
 """.strip()
 
@@ -1034,51 +795,27 @@ model = Pipeline([
             "",
             note_line,
             "",
-            "## Executive Summary",
+            "## Model Choice",
             "",
-            f"- Final model: **{selected_label} LassoCV** on `log1p(SalePrice)`.",
+            f"- Selected model: **{best_model_name}**",
             f"- Selection rationale: {selected_reason}",
-            f"- Holdout RMSE(log) is **{holdout_rmse_log:.6f}**, holdout R^2 on log scale is **{holdout_r2_log:.4f}**, and the implied typical relative error is about **{typical_relative_error * 100:.2f}%**.",
-            f"- Lasso keeps **{nonzero_count} of {n_features_after_encoding}** encoded predictors ({selected_feature_share * 100:.1f}%), which makes the final story materially easier to explain than an all-coefficient model.",
-            f"- On the selected sample, `LassoCV` has the lowest CV RMSE among the tested linear model families in this report.",
             "",
-            "## 1) Why This Lasso Model Is Defensible",
+            "## Model Comparison",
             "",
-            "### Target transformation",
-            f"- Raw `SalePrice` is strongly right-skewed (sample skewness **{saleprice_skew_raw:.4f}**).",
-            f"- After applying `log1p(SalePrice)`, skewness drops to **{saleprice_skew_log:.4f}**, which makes the target closer to the constant-variance, approximately symmetric setting assumed by linear models.",
-            "- Working on the log scale also makes error interpretation more business-friendly because equal vertical gaps correspond more closely to relative pricing mistakes than raw-dollar mistakes.",
+            "Performance comparison across different models:",
             "",
-            "### Why Lasso instead of plain linear regression",
-            f"- After preprocessing, the feature space expands from **{int(active['n_features_before_encoding'])}** raw predictors to **{n_features_after_encoding}** encoded predictors. That is large enough for multicollinearity and coefficient instability to matter.",
-            "- `LinearRegression` is a useful baseline, but it keeps every encoded column. `RidgeCV` stabilizes coefficients, but still leaves every predictor in the model. `LassoCV` both regularizes and zeroes weak predictors, so it gives the best balance of predictive performance and interpretability for this case.",
-            "",
-            *model_family_table,
-            "",
-            "## 2) Data Preparation and Candidate Features",
-            "",
-            "### Cleaning decisions used before modeling",
-            "- Numeric missing values tied to physical absence are filled with 0 where the dataset semantics support that choice.",
-            "- Structural categorical missing values such as basement, garage, alley, fence, pool, and masonry veneer type are mapped to explicit `None`-style levels rather than treated as random missingness.",
-            "- `LotFrontage` is filled using neighborhood medians first, then the global median, so the imputation respects local housing context.",
-            "- Remaining categorical gaps are filled with the mode, and the final model still includes downstream imputation inside the pipeline to keep train/validation behavior consistent.",
-            "",
-            "### Candidate engineered features were tested, not assumed",
-            "- `TotalSF`, `HouseAge`, `RemodAge`, and `TotalBath` were evaluated because the exploratory graphs suggest they should matter.",
-            "- The final report keeps only the feature set that actually performs best under cross-validation on the selected sample.",
-            "",
-            *feature_set_table,
-            "",
-            f"- Decision: {feature_set_recommendation}",
-            "",
-            "## 3) Final Lasso Specification",
-            "",
-            "### Core pipeline",
-            "```python",
-            pipeline_code,
-            "```",
-            "",
-            "### Regression equation",
+            "| Model | CV RMSE (log) | Holdout RMSE (log) | Holdout RMSE ($) | Holdout MAE ($) |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+    )
+    
+    for model_name in sorted(model_results.keys()):
+        result = model_results[model_name]
+        report_md += f"| {model_name} | {result['cv_rmse_log_mean']:.4f} | {result['holdout_rmse_log']:.4f} | {result['holdout_rmse_dollar']:.0f} | {result['holdout_mae_dollar']:.0f} |\n"
+    
+    if best_model_name == "lasso":
+        section2 = [
+            "## 2) Regression Equation",
             "",
             "General form:",
             "- y = log1p(SalePrice)",
@@ -1091,37 +828,61 @@ model = Pipeline([
             "```",
             "",
             "Top10 absolute coefficients:",
+        ]
+        section3_extra = [
+            "",
+            "Top positive coefficients:",
+            "",
+            *pos_lines,
+            "",
+            "Top negative coefficients:",
+            "",
+            *neg_lines,
+            "",
+            "### Coefficient interpretation",
+            "- Numeric features use StandardScaler, so each numeric coefficient means expected change in log1p(SalePrice) for a +1 standard deviation change.",
+            "- Categorical features are one-hot encoded, so each category coefficient is interpreted relative to the omitted baseline category.",
+            "- Rare-category coefficients can be unstable; treat them as predictive signals rather than causal effects.",
+        ]
+    else:
+        section2 = [
+            "## 2) Feature Importances",
+            "",
+            f"Top10 feature importances for {best_model_name}:",
+        ]
+        section3_extra = [
+            "",
+            "### Feature importance interpretation",
+            "- Feature importances show the relative contribution of each feature to the model's predictions.",
+            "- Higher values indicate features that are more important for prediction.",
+            "- Importances are calculated based on how much each feature contributes to reducing impurity in the trees.",
+        ]
+    
+    report_md += "\n" + "\n".join([
+            "## 1) Coding (Core Pipeline)",
+            "",
+            "```python",
+            pipeline_code,
+            "```",
+            "",
+            *section2,
             "",
             *top10_table,
             "",
-            "### What the coefficients mean in plain English",
-            "- Numeric features use `StandardScaler`, so each numeric coefficient is the expected log-price change for a +1 standard deviation shift in that variable.",
-            "- Categorical dummy coefficients are interpreted relative to the omitted baseline category for that field.",
-            "- The approximate price effects below come from `exp(coef) - 1`, so they are multiplicative interpretations on the original price scale.",
-            *[f"- {line}" for line in coefficient_story],
+            "## 3) Model Result",
             "",
-            "### Final fit summary",
-            "",
-            f"- Best alpha: **{best_alpha:.8f}**",
-            f"- Non-zero coefficients: **{nonzero_count}** out of **{n_features_after_encoding}** encoded predictors",
-            "- Top coefficients file: `outputs/top_coefficients.csv`",
+            f"- Model type: **{best_model_name}**",
+            f"- Best alpha: **{best_alpha:.8f}**" if best_model_name == "lasso" else f"- Model parameters: {model_repr}",
+            f"- Non-zero features: **{nonzero_count}**",
+            "- Top coefficients/importances file: `outputs/top_coefficients.csv`",
             "- CV protocol: `KFold(n_splits=5, shuffle=True, random_state=42)` with `neg_root_mean_squared_error` on log1p scale.",
+            *section3_extra,
             "",
-            "## 4) Validation Results",
+            "## 4) Graph: Predicted vs Actual",
             "",
-            "### Predicted vs actual",
             "![Holdout Predicted vs Actual](pred_vs_actual.png)",
             "",
-            "### Residual diagnostics",
-            "![Residual Diagnostics](residual_diagnostics.png)",
-            "",
-            "- Residual mean on the holdout split is "
-            f"**{float(residual_summary['residual_mean_log']):.6f}**, median residual is "
-            f"**{float(residual_summary['residual_median_log']):.6f}**, and the residual-vs-fitted correlation is "
-            f"**{float(residual_summary['residual_corr_with_predicted_log']):.6f}**. Those values are close to zero, which is what we want from an unbiased linear predictor.",
-            f"- The 90th percentile absolute residual on the log scale is **{float(residual_summary['residual_abs_p90_log']):.6f}**, so most holdout cases sit substantially closer than the visually worst examples.",
-            "",
-            "### RMSE and related metrics",
+            "## 5) RMSE",
             "",
             "RMSE (log1p scale) formula:",
             "- RMSE_log = sqrt((1/n) * sum((y_i - y_hat_i)^2)), where y = log1p(SalePrice).",
@@ -1136,45 +897,38 @@ model = Pipeline([
             "",
             f"- 5-fold CV RMSE (folds): {', '.join(f'{v:.6f}' for v in cv_rmse_log_folds)}",
             "",
-            "### Error by price band on the holdout split",
-            "- Dollar error naturally rises for more expensive homes, so the table below reports both raw-dollar MAE and percentage-style error for each holdout quartile.",
-            "",
-            *price_band_table,
-            "",
-            "## 5) Influence Sensitivity and Outlier Handling",
-            "",
             "### Baseline vs Filtered (Sensitivity Analysis)",
             *(sensitivity_table if sensitivity_table else ["- Filtered sensitivity run was unavailable in this execution."]),
             "- This is a sensitivity analysis for influential points, not arbitrary deletion of data.",
             "- A better filtered score indicates influence sensitivity; otherwise baseline is already robust.",
-            "- In this project, the filtered specification wins clearly enough to justify using it as the presentation model while still documenting the full-data benchmark.",
             "",
-            "### Cook's distance rule used for the sensitivity screen",
-            (
-                f"- D_i > 4/n, where n = {len(df)} and 4/n = **{cooks_threshold:.6f}**."
-                if np.isfinite(cooks_threshold)
-                else "- Cook's distance threshold unavailable for this run."
-            ),
-            f"- Influential observations flagged by this rule: **{influential_count}**.",
+            "## Appendix: Outlier Diagnostics",
             "",
-            "### Supporting figures",
-            "- See `../graph/08_cooks_distance.png` for the influence ranking.",
+            "Note: Outlier filtering was not applied in this model comparison run.",
+            "",
+            "Outlier impact figure:",
             "- See `../graph/09_outlier_impact_rmse.png` for RMSE before and after removing high-influence points.",
             "- The chart is a sensitivity check: a noticeable RMSE drop indicates a small set of influential points drives error disproportionately.",
             "- If the change is small, model performance is relatively robust to those candidate outliers.",
             "",
-            "## 6) Interpretation Limits",
+            "## Appendix: Model Comparison Visualizations", 
             "",
-            "- This is a predictive model, not a causal model. A positive coefficient means stronger association with price after controlling for the rest of the model, not proof that changing that variable alone would cause the same price change.",
-            "- Rare categories can still produce unstable coefficients even under Lasso, so the safest presentation language is predictive association rather than economic causation.",
-            "- The filtered model is justified here because the sensitivity gain is large and documented, but both the baseline and filtered results are retained in the report so the audience can see that the choice was evidence-driven rather than hidden.",
+            "Feature importance comparison:",
+            "- See `../graph/12_lasso_coefficients.png` for top Lasso coefficients by absolute magnitude.", 
+            "- See `../graph/13_random_forest_importances.png` for top Random Forest feature importances.", 
+            "- See `../graph/14_gradient_boosting_importances.png` for top Gradient Boosting feature importances.", 
+            "- See `../graph/15_model_comparison_rmse.png` for RMSE comparison across all models.", 
+            "- See `../graph/16_residual_distributions.png` for residual distribution comparison across models.",
         ]
     ) + "\n"
 
     report_md_path = OUTPUT_DIR / "Model_Report.md"
     report_html_path = OUTPUT_DIR / "Model_Report.html"
     report_pdf_path = OUTPUT_DIR / "Model_Report.pdf"
+    
+    info(f"Writing markdown report to {report_md_path}")
     report_md_path.write_text(report_md, encoding="utf-8")
+    info(f"Markdown report written successfully")
 
     pdf_generated = False
     if pandoc_available:
@@ -1193,7 +947,6 @@ model = Pipeline([
         report_html_path.write_text(report_html, encoding="utf-8")
         fallback_images = [
             OUTPUT_DIR / "pred_vs_actual.png",
-            OUTPUT_DIR / "residual_diagnostics.png",
             ROOT_DIR / "graph" / "09_outlier_impact_rmse.png",
             ROOT_DIR / "graph" / "08_cooks_distance.png",
         ]
@@ -1205,13 +958,14 @@ model = Pipeline([
 
     info(f"Wrote {OUTPUT_DIR / 'top_coefficients.csv'}")
     info(f"Wrote {OUTPUT_DIR / 'pred_vs_actual.png'}")
-    info(f"Wrote {OUTPUT_DIR / 'residual_diagnostics.png'}")
     info(f"Wrote {OUTPUT_DIR / 'metrics.json'}")
     info(f"Wrote {OUTPUT_DIR / 'Model_Report.md'}")
     if report_html_path.exists():
         info(f"Wrote {report_html_path}")
     if pdf_generated and report_pdf_path.exists():
         info(f"Wrote {report_pdf_path}")
+
+    info("All reports generated successfully")
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.linear_model import LassoCV, LinearRegression
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import KFold, cross_val_score, train_test_split
@@ -550,6 +551,290 @@ def plot_12_lasso_coefficients(df: pd.DataFrame) -> None:
     save_fig(fig, "12_lasso_coefficients.png")
 
 
+def make_onehot() -> OneHotEncoder:
+    try:
+        return OneHotEncoder(handle_unknown="ignore", sparse_output=True)
+    except TypeError:
+        return OneHotEncoder(handle_unknown="ignore", sparse=True)
+
+
+def fit_model_and_get_importances(df: pd.DataFrame, model_name: str, model_estimator):
+    """Fit a model and return feature importances/coefficients."""
+    excluded_cols = {"SalePrice", "logSalePrice", "Id"}
+    feature_cols = [c for c in df.columns if c not in excluded_cols]
+    
+    X = df[feature_cols].copy()
+    y = df["logSalePrice"].copy()
+
+    numeric_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
+    categorical_cols = [c for c in X.columns if c not in numeric_cols]
+
+    transformers = []
+    if numeric_cols:
+        transformers.append(
+            (
+                "num",
+                Pipeline(
+                    steps=[
+                        ("imputer", SimpleImputer(strategy="median")),
+                        ("scaler", StandardScaler()),
+                    ]
+                ),
+                numeric_cols,
+            )
+        )
+    if categorical_cols:
+        transformers.append(
+            (
+                "cat",
+                Pipeline(
+                    steps=[
+                        ("imputer", SimpleImputer(strategy="most_frequent")),
+                        ("onehot", make_onehot()),
+                    ]
+                ),
+                categorical_cols,
+            )
+        )
+
+    preprocessor = ColumnTransformer(transformers=transformers, remainder="drop")
+    model = Pipeline(
+        steps=[
+            ("preprocessor", preprocessor),
+            (model_name, model_estimator),
+        ]
+    )
+
+    model.fit(X, y)
+    feature_names = model.named_steps["preprocessor"].get_feature_names_out()
+    fitted_model = model.named_steps[model_name]
+
+    if hasattr(fitted_model, 'coef_'):
+        # Linear models
+        coef = fitted_model.coef_
+        coef_df = pd.DataFrame({"feature": feature_names, "importance": np.abs(coef)})
+    elif hasattr(fitted_model, 'feature_importances_'):
+        # Tree-based models
+        coef_df = pd.DataFrame({"feature": feature_names, "importance": fitted_model.feature_importances_})
+    else:
+        coef_df = pd.DataFrame({"feature": feature_names, "importance": np.zeros(len(feature_names))})
+
+    return coef_df.sort_values("importance", ascending=False).head(15)
+
+
+def plot_13_random_forest_importances(df: pd.DataFrame) -> None:
+    """Plot top 15 Random Forest feature importances."""
+    fig, ax = plt.subplots(figsize=(12, 8))
+    
+    try:
+        rf_importances = fit_model_and_get_importances(
+            df, 
+            "random_forest", 
+            RandomForestRegressor(n_estimators=50, max_depth=10, random_state=RANDOM_STATE, n_jobs=1)
+        )
+        
+        bars = ax.barh(range(len(rf_importances)), rf_importances["importance"])
+        ax.set_yticks(range(len(rf_importances)))
+        ax.set_yticklabels([f[:30] + "..." if len(f) > 30 else f for f in rf_importances["feature"]])
+        ax.set_xlabel("Feature Importance")
+        ax.set_title("Top 15 Random Forest Feature Importances")
+        
+        # Add value labels
+        for i, (idx, row) in enumerate(rf_importances.iterrows()):
+            ax.text(row["importance"] + 0.001, i, ".3f", va="center")
+            
+        ax.grid(alpha=0.3)
+        plt.tight_layout()
+        save_fig(fig, "13_random_forest_importances.png")
+        
+    except Exception as e:
+        warn(f"Skipping 13_random_forest_importances.png; {e}")
+
+
+def plot_14_gradient_boosting_importances(df: pd.DataFrame) -> None:
+    """Plot top 15 Gradient Boosting feature importances."""
+    fig, ax = plt.subplots(figsize=(12, 8))
+    
+    try:
+        gb_importances = fit_model_and_get_importances(
+            df, 
+            "gradient_boosting", 
+            GradientBoostingRegressor(n_estimators=20, max_depth=3, random_state=RANDOM_STATE)
+        )
+        
+        bars = ax.barh(range(len(gb_importances)), gb_importances["importance"])
+        ax.set_yticks(range(len(gb_importances)))
+        ax.set_yticklabels([f[:30] + "..." if len(f) > 30 else f for f in gb_importances["feature"]])
+        ax.set_xlabel("Feature Importance")
+        ax.set_title("Top 15 Gradient Boosting Feature Importances")
+        
+        # Add value labels
+        for i, (idx, row) in enumerate(gb_importances.iterrows()):
+            ax.text(row["importance"] + 0.001, i, ".3f", va="center")
+            
+        ax.grid(alpha=0.3)
+        plt.tight_layout()
+        save_fig(fig, "14_gradient_boosting_importances.png")
+        
+    except Exception as e:
+        warn(f"Skipping 14_gradient_boosting_importances.png; {e}")
+
+
+def plot_15_model_comparison_rmse(df: pd.DataFrame) -> None:
+    """Compare RMSE across different models."""
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    try:
+        models = {
+            "Lasso": ("lasso", LassoCV(cv=3, random_state=RANDOM_STATE, max_iter=1000)),
+            "Random Forest": ("random_forest", RandomForestRegressor(n_estimators=50, max_depth=10, random_state=RANDOM_STATE, n_jobs=1)),
+            "Gradient Boosting": ("gradient_boosting", GradientBoostingRegressor(n_estimators=20, max_depth=3, random_state=RANDOM_STATE))
+        }
+        
+        model_names = []
+        cv_rmses = []
+        holdout_rmses = []
+        
+        excluded_cols = {"SalePrice", "logSalePrice", "Id"}
+        feature_cols = [c for c in df.columns if c not in excluded_cols]
+        X = df[feature_cols].copy()
+        y = df["logSalePrice"].copy()
+        
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=RANDOM_STATE)
+        
+        for model_name, (step_name, estimator) in models.items():
+            try:
+                # Create pipeline
+                numeric_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
+                categorical_cols = [c for c in X.columns if c not in numeric_cols]
+                
+                transformers = []
+                if numeric_cols:
+                    transformers.append(("num", Pipeline([("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())]), numeric_cols))
+                if categorical_cols:
+                    transformers.append(("cat", Pipeline([("imputer", SimpleImputer(strategy="most_frequent")), ("onehot", make_onehot())]), categorical_cols))
+                
+                pipeline = Pipeline([("preprocessor", ColumnTransformer(transformers=transformers, remainder="drop")), (step_name, estimator)])
+                
+                # Fit and predict
+                pipeline.fit(X_train, y_train)
+                y_pred = pipeline.predict(X_test)
+                
+                # Calculate RMSE
+                rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+                
+                # Cross-validation
+                kfold = KFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)
+                cv_scores = -cross_val_score(pipeline, X, y, cv=kfold, scoring="neg_root_mean_squared_error", n_jobs=1)
+                cv_rmse = np.mean(cv_scores)
+                
+                model_names.append(model_name)
+                cv_rmses.append(cv_rmse)
+                holdout_rmses.append(rmse)
+                
+            except Exception as e:
+                warn(f"Failed to fit {model_name}: {e}")
+                continue
+        
+        x = np.arange(len(model_names))
+        width = 0.35
+        
+        bars1 = ax.bar(x - width/2, cv_rmses, width, label='CV RMSE', alpha=0.8)
+        bars2 = ax.bar(x + width/2, holdout_rmses, width, label='Holdout RMSE', alpha=0.8)
+        
+        ax.set_xlabel('Model')
+        ax.set_ylabel('RMSE (log scale)')
+        ax.set_title('Model Comparison: RMSE Performance')
+        ax.set_xticks(x)
+        ax.set_xticklabels(model_names)
+        ax.legend()
+        
+        # Add value labels
+        for bar in bars1:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height + 0.001, '.3f', ha='center', va='bottom')
+        for bar in bars2:
+            height = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width()/2., height + 0.001, '.3f', ha='center', va='bottom')
+            
+        ax.grid(alpha=0.3)
+        plt.tight_layout()
+        save_fig(fig, "15_model_comparison_rmse.png")
+        
+    except Exception as e:
+        warn(f"Skipping 15_model_comparison_rmse.png; {e}")
+
+
+def plot_16_residual_distributions(df: pd.DataFrame) -> None:
+    """Plot residual distributions for all models."""
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    
+    try:
+        models = {
+            "Lasso": ("lasso", LassoCV(cv=3, random_state=RANDOM_STATE, max_iter=1000)),
+            "Random Forest": ("random_forest", RandomForestRegressor(n_estimators=50, max_depth=10, random_state=RANDOM_STATE, n_jobs=1)),
+            "Gradient Boosting": ("gradient_boosting", GradientBoostingRegressor(n_estimators=20, max_depth=3, random_state=RANDOM_STATE))
+        }
+        
+        excluded_cols = {"SalePrice", "logSalePrice", "Id"}
+        feature_cols = [c for c in df.columns if c not in excluded_cols]
+        X = df[feature_cols].copy()
+        y = df["logSalePrice"].copy()
+        
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=RANDOM_STATE)
+        
+        for i, (model_name, (step_name, estimator)) in enumerate(models.items()):
+            try:
+                ax = axes[i]
+                
+                # Create pipeline
+                numeric_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
+                categorical_cols = [c for c in X.columns if c not in numeric_cols]
+                
+                transformers = []
+                if numeric_cols:
+                    transformers.append(("num", Pipeline([("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())]), numeric_cols))
+                if categorical_cols:
+                    transformers.append(("cat", Pipeline([("imputer", SimpleImputer(strategy="most_frequent")), ("onehot", make_onehot())]), categorical_cols))
+                
+                pipeline = Pipeline([("preprocessor", ColumnTransformer(transformers=transformers, remainder="drop")), (step_name, estimator)])
+                
+                # Fit and predict
+                pipeline.fit(X_train, y_train)
+                y_pred = pipeline.predict(X_test)
+                
+                # Calculate residuals
+                residuals = y_test - y_pred
+                
+                # Plot distribution
+                ax.hist(residuals, bins=30, alpha=0.7, edgecolor='black')
+                ax.axvline(x=0, color='red', linestyle='--', linewidth=2, label='Zero residual')
+                ax.set_xlabel('Residual (Actual - Predicted)')
+                ax.set_ylabel('Frequency')
+                ax.set_title(f'{model_name} Residual Distribution')
+                ax.grid(alpha=0.3)
+                ax.legend()
+                
+                # Add statistics
+                mean_resid = np.mean(residuals)
+                std_resid = np.std(residuals)
+                ax.text(0.05, 0.95, f'Mean: {mean_resid:.3f}\nStd: {std_resid:.3f}', 
+                       transform=ax.transAxes, verticalalignment='top', 
+                       bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+                
+            except Exception as e:
+                warn(f"Failed to plot residuals for {model_name}: {e}")
+                axes[i].text(0.5, 0.5, f'Error: {str(e)[:50]}...', 
+                           ha='center', va='center', transform=axes[i].transAxes)
+                continue
+        
+        plt.tight_layout()
+        save_fig(fig, "16_residual_distributions.png")
+        
+    except Exception as e:
+        warn(f"Skipping 16_residual_distributions.png; {e}")
+
+
 def main() -> None:
     data_path = find_cleaned_train_csv()
     if data_path is None:
@@ -581,6 +866,10 @@ def main() -> None:
     plot_10_totalsf_vs_logprice(df)
     plot_11_houseage_remodage_trends(df)
     plot_12_lasso_coefficients(df)
+    plot_13_random_forest_importances(df)
+    plot_14_gradient_boosting_importances(df)
+    plot_15_model_comparison_rmse(df)
+    plot_16_residual_distributions(df)
     info("Graph generation complete.")
 
 

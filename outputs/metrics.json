@@ -1,106 +1,55 @@
 {
-  "data_path": "/Users/shijiean/Desktop/491/Case____Housing__export/train_cleaned_v2.csv",
+  "data_path": "C:\\Users\\ctruo\\OneDrive\\Documents\\Freshman RCC Books\\Case_Housing_Data_Analysis\\train_cleaned.csv",
   "target": "logSalePrice = log1p(SalePrice)",
-  "selected_model": "filtered",
-  "selected_model_reason": "Filtered CV RMSE improved by 35.85%; choose filtered model.",
-  "holdout_rmse": 0.09906781847757751,
-  "holdout_rmse_log": 0.09906781847757751,
-  "holdout_r2_log": 0.9347556807133669,
-  "cv_rmse": 0.0917805188666428,
-  "cv_rmse_log_mean": 0.0917805188666428,
-  "cv_rmse_log_std": 0.004804836651411374,
-  "cv_rmse_log_folds": [
-    0.09707692031611545,
-    0.09603724490323945,
-    0.08911775825653441,
-    0.0911052960974223,
-    0.0855653747599024
-  ],
-  "holdout_rmse_dollar": 19456.023127061064,
-  "holdout_mae_dollar": 13215.737760205187,
-  "typical_relative_error": 0.10414117819351142,
-  "best_alpha": 0.00030808085652336175,
-  "nonzero_count": 118,
-  "nonzero_share": 0.42142857142857143,
-  "saleprice_skew_raw": 1.8828757597682129,
-  "saleprice_skew_log": 0.12134661989685329,
-  "residual_summary": {
-    "residual_mean_log": -0.004766394883654276,
-    "residual_median_log": -0.00013151648524356574,
-    "residual_abs_p90_log": 0.15917029401166652,
-    "residual_corr_with_predicted_log": 0.0051537385531916415
+  "selected_model": "lasso",
+  "selected_model_reason": "Selected lasso as it had the lowest CV RMSE among compared models",
+  "model_comparison": {
+    "lasso": {
+      "cv_rmse_log_mean": 0.14386074784940253,
+      "holdout_rmse_log": 0.13597729553844537,
+      "holdout_rmse_dollar": 23999.754534284068,
+      "holdout_mae_dollar": 15826.823423717924,
+      "nonzero_count": 87
+    },
+    "random_forest": {
+      "cv_rmse_log_mean": 0.15069687729904116,
+      "holdout_rmse_log": 0.15011409588472827,
+      "holdout_rmse_dollar": 29675.627947711866,
+      "holdout_mae_dollar": 17807.19415895575,
+      "nonzero_count": 201
+    },
+    "gradient_boosting": {
+      "cv_rmse_log_mean": 0.19157950751021371,
+      "holdout_rmse_log": 0.21361153050784754,
+      "holdout_rmse_dollar": 48560.57892922043,
+      "holdout_mae_dollar": 26441.92257888638,
+      "nonzero_count": 16
+    }
   },
-  "price_band_errors": [
-    {
-      "price_band": "Q1",
-      "n": 70,
-      "median_actual_price": 109999.99999999991,
-      "mae_dollar": 10696.01316512291,
-      "mape": 0.10418257941873062
-    },
-    {
-      "price_band": "Q2",
-      "n": 70,
-      "median_actual_price": 146250.0,
-      "mae_dollar": 8773.677862234003,
-      "mape": 0.058571021238274235
-    },
-    {
-      "price_band": "Q3",
-      "n": 68,
-      "median_actual_price": 185750.00000000006,
-      "mae_dollar": 11318.883752610469,
-      "mape": 0.060254530275466706
-    },
-    {
-      "price_band": "Q4",
-      "n": 69,
-      "median_actual_price": 265978.9999999998,
-      "mae_dollar": 22147.781050497706,
-      "mape": 0.07842359577772486
-    }
+  "holdout_rmse": 0.13597729553844537,
+  "holdout_rmse_log": 0.13597729553844537,
+  "cv_rmse": 0.14386074784940253,
+  "cv_rmse_log_mean": 0.14386074784940253,
+  "cv_rmse_log_std": 0.04022926870547971,
+  "cv_rmse_log_folds": [
+    0.13119744136825826,
+    0.18889801518277968,
+    0.11148678699716966
   ],
-  "model_family_comparison": [
-    {
-      "model": "LassoCV",
-      "cv_rmse_log_mean": 0.0917805188666428,
-      "cv_rmse_log_std": 0.004804836651411374
-    },
-    {
-      "model": "RidgeCV",
-      "cv_rmse_log_mean": 0.09270701341267677,
-      "cv_rmse_log_std": 0.004377904092289985
-    },
-    {
-      "model": "LinearRegression",
-      "cv_rmse_log_mean": 0.10098778739344824,
-      "cv_rmse_log_std": 0.0048135330955760575
-    }
-  ],
-  "feature_set_comparison": [
-    {
-      "feature_set": "Original cleaned features",
-      "n_features_before_encoding": 79,
-      "cv_rmse_log_mean": 0.0917805188666428,
-      "cv_rmse_log_std": 0.004804836651411374
-    },
-    {
-      "feature_set": "Original + TotalSF + HouseAge + RemodAge + TotalBath",
-      "n_features_before_encoding": 83,
-      "cv_rmse_log_mean": 0.09181655027588095,
-      "cv_rmse_log_std": 0.004714807734201497
-    }
-  ],
-  "feature_set_recommendation": "Engineered features were tested but not retained because they did not improve cross-validated RMSE.",
-  "cooks_distance_threshold_4_over_n": 0.0027397260273972603,
-  "influential_points_count": 78,
+  "holdout_rmse_dollar": 23999.754534284068,
+  "holdout_mae_dollar": 15826.823423717924,
+  "typical_relative_error": 0.14565588179964786,
+  "best_alpha": 0.0007814020258273761,
+  "nonzero_count": 87,
+  "cooks_distance_threshold_4_over_n": null,
+  "influential_points_count": 0,
   "n_rows_total": 1460,
-  "n_rows_model": 1382,
+  "n_rows_model": 1460,
   "n_features_before_encoding": 79,
-  "n_features_after_encoding": 280,
-  "baseline_holdout_rmse_log": 0.13597729553844506,
-  "baseline_cv_rmse_log_mean": 0.14306691547601522,
-  "filtered_holdout_rmse_log": 0.09906781847757751,
-  "filtered_cv_rmse_log_mean": 0.0917805188666428,
-  "filtered_improvement_ratio_vs_baseline_cv": 0.3584783836202189
+  "n_features_after_encoding": 285,
+  "baseline_holdout_rmse_log": 0.13597729553844537,
+  "baseline_cv_rmse_log_mean": 0.14386074784940253,
+  "filtered_holdout_rmse_log": null,
+  "filtered_cv_rmse_log_mean": null,
+  "filtered_improvement_ratio_vs_baseline_cv": null
 }
