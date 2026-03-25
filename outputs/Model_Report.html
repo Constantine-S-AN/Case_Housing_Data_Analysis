@@ -17,12 +17,46 @@ img{max-width:100%;border:1px solid #ddd;border-radius:4px;}
 <body>
 <h1>Model Report</h1>
 <p><strong>Pandoc not found. HTML is generated, and Python fallback also exports PDF.</strong></p>
-<h2>Model Choice</h2>
+<h2>Executive Summary</h2>
 <ul>
-<li>Selected model: <strong>filtered</strong></li>
+<li>Final model: <strong>filtered LassoCV</strong> on <code>log1p(SalePrice)</code>.</li>
 <li>Selection rationale: Filtered CV RMSE improved by 35.85%; choose filtered model.</li>
+<li>Holdout RMSE(log) is <strong>0.099068</strong>, holdout R^2 on log scale is <strong>0.9348</strong>, and the implied typical relative error is about <strong>10.41%</strong>.</li>
+<li>Lasso keeps <strong>118 of 280</strong> encoded predictors (42.1%), which makes the final story materially easier to explain than an all-coefficient model.</li>
+<li>On the selected sample, <code>LassoCV</code> has the lowest CV RMSE among the tested linear model families in this report.</li>
 </ul>
-<h2>1) Coding (Core Pipeline)</h2>
+<h2>1) Why This Lasso Model Is Defensible</h2>
+<h3>Target transformation</h3>
+<ul>
+<li>Raw <code>SalePrice</code> is strongly right-skewed (sample skewness <strong>1.8829</strong>).</li>
+<li>After applying <code>log1p(SalePrice)</code>, skewness drops to <strong>0.1213</strong>, which makes the target closer to the constant-variance, approximately symmetric setting assumed by linear models.</li>
+<li>Working on the log scale also makes error interpretation more business-friendly because equal vertical gaps correspond more closely to relative pricing mistakes than raw-dollar mistakes.</li>
+</ul>
+<h3>Why Lasso instead of plain linear regression</h3>
+<ul>
+<li>After preprocessing, the feature space expands from <strong>79</strong> raw predictors to <strong>280</strong> encoded predictors. That is large enough for multicollinearity and coefficient instability to matter.</li>
+<li><code>LinearRegression</code> is a useful baseline, but it keeps every encoded column. <code>RidgeCV</code> stabilizes coefficients, but still leaves every predictor in the model. <code>LassoCV</code> both regularizes and zeroes weak predictors, so it gives the best balance of predictive performance and interpretability for this case.</li>
+</ul>
+<table><thead><tr><th>Model family</th><th>CV RMSE(log)</th><th>CV SD</th><th>Gap vs best</th></tr></thead><tbody><tr><td>LassoCV</td><td>0.091781</td><td>0.004805</td><td>0.000000</td></tr><tr><td>RidgeCV</td><td>0.092707</td><td>0.004378</td><td>0.000926</td></tr><tr><td>LinearRegression</td><td>0.100988</td><td>0.004814</td><td>0.009207</td></tr></tbody></table>
+<h2>2) Data Preparation and Candidate Features</h2>
+<h3>Cleaning decisions used before modeling</h3>
+<ul>
+<li>Numeric missing values tied to physical absence are filled with 0 where the dataset semantics support that choice.</li>
+<li>Structural categorical missing values such as basement, garage, alley, fence, pool, and masonry veneer type are mapped to explicit <code>None</code>-style levels rather than treated as random missingness.</li>
+<li><code>LotFrontage</code> is filled using neighborhood medians first, then the global median, so the imputation respects local housing context.</li>
+<li>Remaining categorical gaps are filled with the mode, and the final model still includes downstream imputation inside the pipeline to keep train/validation behavior consistent.</li>
+</ul>
+<h3>Candidate engineered features were tested, not assumed</h3>
+<ul>
+<li><code>TotalSF</code>, <code>HouseAge</code>, <code>RemodAge</code>, and <code>TotalBath</code> were evaluated because the exploratory graphs suggest they should matter.</li>
+<li>The final report keeps only the feature set that actually performs best under cross-validation on the selected sample.</li>
+</ul>
+<table><thead><tr><th>Feature set</th><th>Variables before encoding</th><th>CV RMSE(log)</th><th>CV SD</th><th>Decision</th></tr></thead><tbody><tr><td>Original cleaned features</td><td>79</td><td>0.091781</td><td>0.004805</td><td>Retain</td></tr><tr><td>Original + TotalSF + HouseAge + RemodAge + TotalBath</td><td>83</td><td>0.091817</td><td>0.004715</td><td>Tested, not retained</td></tr></tbody></table>
+<ul>
+<li>Decision: Engineered features were tested but not retained because they did not improve cross-validated RMSE.</li>
+</ul>
+<h2>3) Final Lasso Specification</h2>
+<h3>Core pipeline</h3>
 <pre><code>from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LassoCV
@@ -44,7 +78,7 @@ model = Pipeline([
     (&quot;preprocessor&quot;, preprocessor),
     (&quot;lasso&quot;, LassoCV(cv=5, random_state=42)),
 ])</code></pre>
-<h2>2) Regression Equation</h2>
+<h3>Regression equation</h3>
 <p>General form:</p>
 <ul>
 <li>y = log1p(SalePrice)</li>
@@ -53,27 +87,36 @@ model = Pipeline([
 <p>Expanded equation (Top10 coefficients only):</p>
 <pre><code>y_hat = 11.858684 + 0.150255 * cat__Neighborhood_Crawfor + 0.121175 * num__GrLivArea + 0.090703 * cat__Neighborhood_StoneBr - 0.089279 * cat__MasVnrType_BrkCmn - 0.083834 * cat__Neighborhood_MeadowV - 0.077165 * cat__RoofMatl_Tar&amp;Grv + 0.070704 * num__YearBuilt + 0.070021 * cat__Exterior1st_BrkFace + 0.069353 * num__OverallQual + 0.055265 * cat__Neighborhood_Somerst</code></pre>
 <p>Top10 absolute coefficients:</p>
-<table><thead><tr><th>Rank</th><th>Feature</th><th>Coefficient</th></tr></thead><tbody><tr><td>1</td><td>cat__Neighborhood_Crawfor</td><td>0.150255</td></tr><tr><td>2</td><td>num__GrLivArea</td><td>0.121175</td></tr><tr><td>3</td><td>cat__Neighborhood_StoneBr</td><td>0.090703</td></tr><tr><td>4</td><td>cat__MasVnrType_BrkCmn</td><td>-0.089279</td></tr><tr><td>5</td><td>cat__Neighborhood_MeadowV</td><td>-0.083834</td></tr><tr><td>6</td><td>cat__RoofMatl_Tar&amp;Grv</td><td>-0.077165</td></tr><tr><td>7</td><td>num__YearBuilt</td><td>0.070704</td></tr><tr><td>8</td><td>cat__Exterior1st_BrkFace</td><td>0.070021</td></tr><tr><td>9</td><td>num__OverallQual</td><td>0.069353</td></tr><tr><td>10</td><td>cat__Neighborhood_Somerst</td><td>0.055265</td></tr></tbody></table>
-<h2>3) Regression Result</h2>
+<table><thead><tr><th>Rank</th><th>Feature</th><th>Coefficient</th><th>Approx price effect</th></tr></thead><tbody><tr><td>1</td><td>cat__Neighborhood_Crawfor</td><td>0.150255</td><td>16.21%</td></tr><tr><td>2</td><td>num__GrLivArea</td><td>0.121175</td><td>12.88%</td></tr><tr><td>3</td><td>cat__Neighborhood_StoneBr</td><td>0.090703</td><td>9.49%</td></tr><tr><td>4</td><td>cat__MasVnrType_BrkCmn</td><td>-0.089279</td><td>-8.54%</td></tr><tr><td>5</td><td>cat__Neighborhood_MeadowV</td><td>-0.083834</td><td>-8.04%</td></tr><tr><td>6</td><td>cat__RoofMatl_Tar&amp;Grv</td><td>-0.077165</td><td>-7.43%</td></tr><tr><td>7</td><td>num__YearBuilt</td><td>0.070704</td><td>7.33%</td></tr><tr><td>8</td><td>cat__Exterior1st_BrkFace</td><td>0.070021</td><td>7.25%</td></tr><tr><td>9</td><td>num__OverallQual</td><td>0.069353</td><td>7.18%</td></tr><tr><td>10</td><td>cat__Neighborhood_Somerst</td><td>0.055265</td><td>5.68%</td></tr></tbody></table>
+<h3>What the coefficients mean in plain English</h3>
+<ul>
+<li>Numeric features use <code>StandardScaler</code>, so each numeric coefficient is the expected log-price change for a +1 standard deviation shift in that variable.</li>
+<li>Categorical dummy coefficients are interpreted relative to the omitted baseline category for that field.</li>
+<li>The approximate price effects below come from <code>exp(coef) - 1</code>, so they are multiplicative interpretations on the original price scale.</li>
+<li><code>Neighborhood = Crawfor</code>: relative to the omitted baseline category, predicted sale price is about 16.2% higher.</li>
+<li><code>GrLivArea</code>: a +1 standard deviation increase is associated with about 12.9% higher predicted sale price.</li>
+<li><code>Neighborhood = StoneBr</code>: relative to the omitted baseline category, predicted sale price is about 9.5% higher.</li>
+<li><code>MasVnrType = BrkCmn</code>: relative to the omitted baseline category, predicted sale price is about 8.5% lower.</li>
+<li><code>Neighborhood = MeadowV</code>: relative to the omitted baseline category, predicted sale price is about 8.0% lower.</li>
+<li><code>RoofMatl = Tar&amp;Grv</code>: relative to the omitted baseline category, predicted sale price is about 7.4% lower.</li>
+</ul>
+<h3>Final fit summary</h3>
 <ul>
 <li>Best alpha: <strong>0.00030808</strong></li>
-<li>Non-zero coefficients: <strong>118</strong></li>
+<li>Non-zero coefficients: <strong>118</strong> out of <strong>280</strong> encoded predictors</li>
 <li>Top coefficients file: <code>outputs/top_coefficients.csv</code></li>
 <li>CV protocol: <code>KFold(n_splits=5, shuffle=True, random_state=42)</code> with <code>neg_root_mean_squared_error</code> on log1p scale.</li>
 </ul>
-<p>Top positive coefficients:</p>
-<table><thead><tr><th>Feature</th><th>Coefficient</th></tr></thead><tbody><tr><td>cat__Neighborhood_Crawfor</td><td>0.150255</td></tr><tr><td>num__GrLivArea</td><td>0.121175</td></tr><tr><td>cat__Neighborhood_StoneBr</td><td>0.090703</td></tr><tr><td>num__YearBuilt</td><td>0.070704</td></tr><tr><td>cat__Exterior1st_BrkFace</td><td>0.070021</td></tr><tr><td>num__OverallQual</td><td>0.069353</td></tr><tr><td>cat__Neighborhood_Somerst</td><td>0.055265</td></tr><tr><td>cat__Neighborhood_BrkSide</td><td>0.054326</td></tr><tr><td>cat__Neighborhood_NridgHt</td><td>0.053706</td></tr><tr><td>cat__Functional_Typ</td><td>0.053216</td></tr></tbody></table>
-<p>Top negative coefficients:</p>
-<table><thead><tr><th>Feature</th><th>Coefficient</th></tr></thead><tbody><tr><td>cat__MasVnrType_BrkCmn</td><td>-0.089279</td></tr><tr><td>cat__Neighborhood_MeadowV</td><td>-0.083834</td></tr><tr><td>cat__RoofMatl_Tar&amp;Grv</td><td>-0.077165</td></tr><tr><td>cat__Neighborhood_Edwards</td><td>-0.042997</td></tr><tr><td>cat__MSZoning_C (all)</td><td>-0.039919</td></tr><tr><td>cat__GarageType_CarPort</td><td>-0.039398</td></tr><tr><td>cat__SaleCondition_Abnorml</td><td>-0.038027</td></tr><tr><td>cat__BldgType_Twnhs</td><td>-0.032616</td></tr><tr><td>cat__Condition1_Artery</td><td>-0.029845</td></tr><tr><td>cat__GarageQual_Fa</td><td>-0.029201</td></tr></tbody></table>
-<h3>Coefficient interpretation</h3>
-<ul>
-<li>Numeric features use StandardScaler, so each numeric coefficient means expected change in log1p(SalePrice) for a +1 standard deviation change.</li>
-<li>Categorical features are one-hot encoded, so each category coefficient is interpreted relative to the omitted baseline category.</li>
-<li>Rare-category coefficients can be unstable; treat them as predictive signals rather than causal effects.</li>
-</ul>
-<h2>4) Graph: Predicted vs Actual</h2>
+<h2>4) Validation Results</h2>
+<h3>Predicted vs actual</h3>
 <p><img src="pred_vs_actual.png" alt="Holdout Predicted vs Actual" /></p>
-<h2>5) RMSE</h2>
+<h3>Residual diagnostics</h3>
+<p><img src="residual_diagnostics.png" alt="Residual Diagnostics" /></p>
+<ul>
+<li>Residual mean on the holdout split is <strong>-0.004766</strong>, median residual is <strong>-0.000132</strong>, and the residual-vs-fitted correlation is <strong>0.005154</strong>. Those values are close to zero, which is what we want from an unbiased linear predictor.</li>
+<li>The 90th percentile absolute residual on the log scale is <strong>0.159170</strong>, so most holdout cases sit substantially closer than the visually worst examples.</li>
+</ul>
+<h3>RMSE and related metrics</h3>
 <p>RMSE (log1p scale) formula:</p>
 <ul>
 <li>RMSE_log = sqrt((1/n) * sum((y_i - y_hat_i)^2)), where y = log1p(SalePrice).</li>
@@ -85,26 +128,40 @@ model = Pipeline([
 <li>SalePrice_true = exp(y_true) - 1</li>
 <li>typical_relative_error = exp(holdout_rmse_log) - 1</li>
 </ul>
-<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody><tr><td>holdout_rmse_log</td><td>0.099068</td></tr><tr><td>cv_rmse_log_mean</td><td>0.091781</td></tr><tr><td>holdout_rmse_dollar</td><td>19456.02</td></tr><tr><td>holdout_mae_dollar</td><td>13215.74</td></tr><tr><td>typical_relative_error = exp(holdout_rmse_log)-1</td><td>0.104141 (10.41%)</td></tr></tbody></table>
+<table><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody><tr><td>holdout_rmse_log</td><td>0.099068</td></tr><tr><td>holdout_r2_log</td><td>0.934756</td></tr><tr><td>cv_rmse_log_mean</td><td>0.091781</td></tr><tr><td>cv_rmse_log_std</td><td>0.004805</td></tr><tr><td>holdout_rmse_dollar</td><td>19456.02</td></tr><tr><td>holdout_mae_dollar</td><td>13215.74</td></tr><tr><td>typical_relative_error = exp(holdout_rmse_log)-1</td><td>0.104141 (10.41%)</td></tr></tbody></table>
 <ul>
 <li>5-fold CV RMSE (folds): 0.097077, 0.096037, 0.089118, 0.091105, 0.085565</li>
 </ul>
+<h3>Error by price band on the holdout split</h3>
+<ul>
+<li>Dollar error naturally rises for more expensive homes, so the table below reports both raw-dollar MAE and percentage-style error for each holdout quartile.</li>
+</ul>
+<table><thead><tr><th>Holdout price band</th><th>n</th><th>Median actual price</th><th>MAE ($)</th><th>Mean absolute % error</th></tr></thead><tbody><tr><td>Q1</td><td>70</td><td>110000.00</td><td>10696.01</td><td>10.42%</td></tr><tr><td>Q2</td><td>70</td><td>146250.00</td><td>8773.68</td><td>5.86%</td></tr><tr><td>Q3</td><td>68</td><td>185750.00</td><td>11318.88</td><td>6.03%</td></tr><tr><td>Q4</td><td>69</td><td>265979.00</td><td>22147.78</td><td>7.84%</td></tr></tbody></table>
+<h2>5) Influence Sensitivity and Outlier Handling</h2>
 <h3>Baseline vs Filtered (Sensitivity Analysis)</h3>
 <table><thead><tr><th>Model</th><th>n_rows</th><th>holdout_rmse_log</th><th>cv_rmse_log_mean</th><th>selected</th></tr></thead><tbody><tr><td>Baseline</td><td>1460</td><td>0.135977</td><td>0.143067</td><td>No</td></tr><tr><td>Filtered (Cook&#x27;s D &gt; 4/n)</td><td>1382</td><td>0.099068</td><td>0.091781</td><td>Yes</td></tr></tbody></table>
 <ul>
 <li>This is a sensitivity analysis for influential points, not arbitrary deletion of data.</li>
 <li>A better filtered score indicates influence sensitivity; otherwise baseline is already robust.</li>
+<li>In this project, the filtered specification wins clearly enough to justify using it as the presentation model while still documenting the full-data benchmark.</li>
 </ul>
-<h2>Appendix: Outlier Diagnostics</h2>
-<p>Cook&#x27;s Distance threshold (4/n rule):</p>
+<h3>Cook&#x27;s distance rule used for the sensitivity screen</h3>
 <ul>
 <li>D_i &gt; 4/n, where n = 1460 and 4/n = <strong>0.002740</strong>.</li>
+<li>Influential observations flagged by this rule: <strong>78</strong>.</li>
 </ul>
-<p>Outlier impact figure:</p>
+<h3>Supporting figures</h3>
 <ul>
+<li>See <code>../graph/08_cooks_distance.png</code> for the influence ranking.</li>
 <li>See <code>../graph/09_outlier_impact_rmse.png</code> for RMSE before and after removing high-influence points.</li>
 <li>The chart is a sensitivity check: a noticeable RMSE drop indicates a small set of influential points drives error disproportionately.</li>
 <li>If the change is small, model performance is relatively robust to those candidate outliers.</li>
+</ul>
+<h2>6) Interpretation Limits</h2>
+<ul>
+<li>This is a predictive model, not a causal model. A positive coefficient means stronger association with price after controlling for the rest of the model, not proof that changing that variable alone would cause the same price change.</li>
+<li>Rare categories can still produce unstable coefficients even under Lasso, so the safest presentation language is predictive association rather than economic causation.</li>
+<li>The filtered model is justified here because the sensitivity gain is large and documented, but both the baseline and filtered results are retained in the report so the audience can see that the choice was evidence-driven rather than hidden.</li>
 </ul>
 </body>
 </html>
