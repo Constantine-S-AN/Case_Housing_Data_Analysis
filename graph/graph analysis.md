@@ -54,3 +54,23 @@ Below are the plots generated from `train_cleaned_v2.csv` and the key insights f
    - Insight: Largest-magnitude coefficients combine structural and location effects (for example `GrLivArea`, `OverallQual`, and neighborhood indicators), with clear positive/negative signs.
    - Decision: Use signed top Lasso coefficients as the interpretable feature story for the final presentation.
    - Validation: Re-run LassoCV on repeated folds/seeds and keep only features whose sign/rank remains stable.
+
+13) **Random Forest Feature Importances (Top 15)** (`graph/13_random_forest_importances.png`)
+   - Insight: Tree-based importance ranks reinforce some overlap with Lasso (e.g., `OverallQual`, `GrLivArea`) but also highlight different non-linear interactions and complex spreads.
+   - Decision: Recognize Random Forest is less sparse, and use this chart to identify candidates where nonlinearity could matter even if Lasso shrinks them.
+   - Validation: Cross-compare the top features with the Lasso non-zero list; most consistent predictors support primary model confidence, while divergent predictors get explored in ablation runs.
+
+14) **Gradient Boosting Feature Importances (Top 15)** (`graph/14_gradient_boosting_importances.png`)
+   - Insight: Gradient Boosting importance tends to highlight stronger non-linear-chain features and occasional deep splits; a smaller effective predictor set may indicate terminal performance differences in dataset complexity.
+   - Decision: Evaluate where GB’s highly ranked features differ from Lasso, then test whether including those as engineered interactions improves linear model robustness.
+   - Validation: Use this with `plot_15` and `plot_16` to validate whether GB rank differences actually correspond to predictive gain or overfit noise.
+
+15) **Model Comparison RMSE (CV vs Holdout)** (`graph/15_model_comparison_rmse.png`)
+   - Insight: Lasso obtains the lowest CV RMSE and holdout RMSE, confirming the best bias-variance tradeoff on this dataset versus RF/GB under current hyperparameters.
+   - Decision: Prefer Lasso as main candidate in final report but still keep RF/GB as a sensitivity check for model risk and nonlinearity.
+   - Validation: Re-run with alternate hyperparameters and >5 CV folds to ensure the ranking is stable; if RF/GB beats Lasso then update model choice and narrative.
+
+16) **Residual Distributions (Lasso, RF, GB)** (`graph/16_residual_distributions.png`)
+   - Insight: Lasso residuals are more tightly centered with fewer extreme tails, while RF/GB show heavier tails/variance from overfitting small clusters.
+   - Decision: Use Lasso resid distribution as evidence for robust and interpretable errors; include tree-based residuals in appendix for risk assessment.
+   - Validation: Quantify with distribution metrics (skew, kurtosis, quantile spread), then use a threshold-based deployment plan that favors model stability and interpretability.
