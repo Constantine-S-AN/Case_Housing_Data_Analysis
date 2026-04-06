@@ -74,3 +74,15 @@ Below are the plots generated from `train_cleaned_v2.csv` and the key insights f
    - Insight: Lasso residuals are more tightly centered with fewer extreme tails, while RF/GB show heavier tails/variance from overfitting small clusters.
    - Decision: Use Lasso resid distribution as evidence for robust and interpretable errors; include tree-based residuals in appendix for risk assessment.
    - Validation: Quantify with distribution metrics (skew, kurtosis, quantile spread), then use a threshold-based deployment plan that favors model stability and interpretability.
+
+17) **Random Forest Predictions (Predicted vs Actual)** (`graph/17_random_forest_predictions.png`)
+   - Insight: Random Forest model achieves RMSE=0.1496, MAE=0.1007, R²=0.8800 on the holdout test set.
+   - Pattern: Predictions cluster tightly around the perfect-prediction diagonal (red dashed line), with some scatter above/below indicating unavoidable variance in individual house valuations.
+   - Decision: RF performs well (R²=0.88) but with slightly higher error than Lasso, suggesting some overfitting or sensitivity to specific neighborhoods and features.
+   - Validation: This visualization supports the conclusion that Lasso's sparsity provides better generalization despite RF's nonlinear flexibility on this dataset.
+
+18) **Gradient Boosting Predictions (Predicted vs Actual)** (`graph/18_gradient_boosting_predictions.png`)
+   - Insight: Gradient Boosting model achieves RMSE=0.1829, MAE=0.1226, R²=0.8208 on the holdout test set.
+   - Pattern: Predictions show wider scatter from the diagonal than RF, with more frequent under-predictions for high-priced homes (upper right), indicating GB's constraint hyperparameters may be too conservative (small n_estimators, shallow trees).
+   - Decision: GB underperforms both Lasso and RF on this dataset---likely because the shallow trees and limited boosting iterations restrict learning capacity for complex price interactions.
+   - Validation: Results validate Lasso as the best bias-variance choice; tree-based models suggest feature interactions exist but are not captured well without deeper trees (which would increase overfit risk).

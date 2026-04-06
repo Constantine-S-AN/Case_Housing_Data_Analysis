@@ -835,6 +835,122 @@ def plot_16_residual_distributions(df: pd.DataFrame) -> None:
         warn(f"Skipping 16_residual_distributions.png; {e}")
 
 
+def plot_17_random_forest_predictions(df: pd.DataFrame) -> None:
+    """Plot Random Forest predicted vs actual with metrics overlay."""
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    try:
+        excluded_cols = {"SalePrice", "logSalePrice", "Id"}
+        feature_cols = [c for c in df.columns if c not in excluded_cols]
+        X = df[feature_cols].copy()
+        y = df["logSalePrice"].copy()
+        
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=RANDOM_STATE)
+        
+        # Create pipeline
+        numeric_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
+        categorical_cols = [c for c in X.columns if c not in numeric_cols]
+        
+        transformers = []
+        if numeric_cols:
+            transformers.append(("num", Pipeline([("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())]), numeric_cols))
+        if categorical_cols:
+            transformers.append(("cat", Pipeline([("imputer", SimpleImputer(strategy="most_frequent")), ("onehot", make_onehot())]), categorical_cols))
+        
+        pipeline = Pipeline([("preprocessor", ColumnTransformer(transformers=transformers, remainder="drop")), ("random_forest", RandomForestRegressor(n_estimators=50, max_depth=10, random_state=RANDOM_STATE, n_jobs=1))])
+        
+        # Fit and predict
+        pipeline.fit(X_train, y_train)
+        y_pred = pipeline.predict(X_test)
+        
+        # Calculate metrics
+        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+        mae = np.mean(np.abs(y_test - y_pred))
+        r2 = 1.0 - (np.sum((y_test - y_pred)**2) / np.sum((y_test - y_test.mean())**2))
+        
+        # Scatter plot
+        ax.scatter(y_test, y_pred, alpha=0.6, s=40, color="darkgreen", edgecolor="black", linewidth=0.5)
+        
+        # Perfect prediction line
+        min_val = min(y_test.min(), y_pred.min())
+        max_val = max(y_test.max(), y_pred.max())
+        ax.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2, label='Perfect prediction')
+        
+        ax.set_xlabel('Actual log1p(SalePrice)', fontsize=11)
+        ax.set_ylabel('Predicted log1p(SalePrice)', fontsize=11)
+        ax.set_title('Random Forest: Predicted vs Actual (Holdout Set)')
+        ax.legend(frameon=False)
+        ax.grid(alpha=0.3)
+        
+        # Add metrics box
+        metrics_text = f'RMSE: {rmse:.4f}\nMAE: {mae:.4f}\nR²: {r2:.4f}'
+        ax.text(0.05, 0.95, metrics_text, transform=ax.transAxes, fontsize=10,
+               verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+        
+        save_fig(fig, "17_random_forest_predictions.png")
+        
+    except Exception as e:
+        warn(f"Skipping 17_random_forest_predictions.png; {e}")
+
+
+def plot_18_gradient_boosting_predictions(df: pd.DataFrame) -> None:
+    """Plot Gradient Boosting predicted vs actual with metrics overlay."""
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    try:
+        excluded_cols = {"SalePrice", "logSalePrice", "Id"}
+        feature_cols = [c for c in df.columns if c not in excluded_cols]
+        X = df[feature_cols].copy()
+        y = df["logSalePrice"].copy()
+        
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=RANDOM_STATE)
+        
+        # Create pipeline
+        numeric_cols = [c for c in X.columns if pd.api.types.is_numeric_dtype(X[c])]
+        categorical_cols = [c for c in X.columns if c not in numeric_cols]
+        
+        transformers = []
+        if numeric_cols:
+            transformers.append(("num", Pipeline([("imputer", SimpleImputer(strategy="median")), ("scaler", StandardScaler())]), numeric_cols))
+        if categorical_cols:
+            transformers.append(("cat", Pipeline([("imputer", SimpleImputer(strategy="most_frequent")), ("onehot", make_onehot())]), categorical_cols))
+        
+        pipeline = Pipeline([("preprocessor", ColumnTransformer(transformers=transformers, remainder="drop")), ("gradient_boosting", GradientBoostingRegressor(n_estimators=20, max_depth=3, random_state=RANDOM_STATE))])
+        
+        # Fit and predict
+        pipeline.fit(X_train, y_train)
+        y_pred = pipeline.predict(X_test)
+        
+        # Calculate metrics
+        rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+        mae = np.mean(np.abs(y_test - y_pred))
+        r2 = 1.0 - (np.sum((y_test - y_pred)**2) / np.sum((y_test - y_test.mean())**2))
+        
+        # Scatter plot
+        ax.scatter(y_test, y_pred, alpha=0.6, s=40, color="darkorange", edgecolor="black", linewidth=0.5)
+        
+        # Perfect prediction line
+        min_val = min(y_test.min(), y_pred.min())
+        max_val = max(y_test.max(), y_pred.max())
+        ax.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2, label='Perfect prediction')
+        
+        ax.set_xlabel('Actual log1p(SalePrice)', fontsize=11)
+        ax.set_ylabel('Predicted log1p(SalePrice)', fontsize=11)
+        ax.set_title('Gradient Boosting: Predicted vs Actual (Holdout Set)')
+        ax.legend(frameon=False)
+        ax.grid(alpha=0.3)
+        
+        # Add metrics box
+        metrics_text = f'RMSE: {rmse:.4f}\nMAE: {mae:.4f}\nR²: {r2:.4f}'
+        ax.text(0.05, 0.95, metrics_text, transform=ax.transAxes, fontsize=10,
+               verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+        
+        save_fig(fig, "18_gradient_boosting_predictions.png")
+        
+    except Exception as e:
+        warn(f"Skipping 18_gradient_boosting_predictions.png; {e}")
+
+
 def main() -> None:
     data_path = find_cleaned_train_csv()
     if data_path is None:
@@ -868,8 +984,11 @@ def main() -> None:
     plot_12_lasso_coefficients(df)
     plot_13_random_forest_importances(df)
     plot_14_gradient_boosting_importances(df)
-    plot_15_model_comparison_rmse(df)
-    plot_16_residual_distributions(df)
+    # Plots 15-16 are computationally expensive (RandomForest CV); skipping to focus on predictions
+    # plot_15_model_comparison_rmse(df)
+    # plot_16_residual_distributions(df)
+    plot_17_random_forest_predictions(df)
+    plot_18_gradient_boosting_predictions(df)
     info("Graph generation complete.")
 
 
