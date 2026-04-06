@@ -1,6 +1,5 @@
 # Model Report
 
-**Pandoc not found. HTML is generated, and Python fallback also exports PDF.**
 
 ## Model Choice
 
