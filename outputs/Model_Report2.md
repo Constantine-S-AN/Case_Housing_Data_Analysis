@@ -4,6 +4,7 @@
 ## Model Choice
 
 - Selected model: **lasso**
+- Lasso is a linear regression model with L1 regularization that helps reduce overfitting by shrinking less useful feature coefficients to zero.
 - Selection rationale: Selected Lasso as it had the best validation performance and the cleanest balance of accuracy, sparsity, and interpretability.
 
 ## Model Journey
