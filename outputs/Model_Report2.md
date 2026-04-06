@@ -3,8 +3,16 @@
 
 ## Model Choice
 
+### Lasso Regression
+A linear regression model that uses L1 regularization to automatically select the most important features by shrinking less useful coefficients to exactly zero. This prevents overfitting while keeping the model simple, sparse, and interpretable.
+
+### Random Forest  
+An ensemble method that builds many decision trees and averages their predictions to reduce overfitting and improve accuracy. It handles complex, nonlinear relationships in the data without requiring extensive feature engineering.
+
+### Gradient Boosting
+A sequential ensemble technique where each new decision tree is trained to correct the mistakes of the previous trees. This gradually improves predictions but requires careful tuning of parameters like tree depth and learning rate to avoid overfitting.
+
 - Selected model: **lasso**
-- Lasso is a linear regression model with L1 regularization that helps reduce overfitting by shrinking less useful feature coefficients to zero.
 - Selection rationale: Selected Lasso as it had the best validation performance and the cleanest balance of accuracy, sparsity, and interpretability.
 
 ## Model Journey
