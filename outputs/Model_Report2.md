@@ -1,19 +1,21 @@
 # Model Report
+What our project was trying to do?
 
+Our goal was to predict house sale prices using the characteristics of each house. That means we were not only interested in which variables seemed related to price, but also in which model actually predicted unseen houses the best.
 
 ## Model Choice
 
 ### Lasso Regression
-A linear regression model that uses L1 regularization to automatically select the most important features by shrinking less useful coefficients to exactly zero. This prevents overfitting while keeping the model simple, sparse, and interpretable.
+Lasso is basically a linear model that helps trim out the less important variables. That makes the model cleaner, easier to explain, and less likely to overfit.
 
 ### Random Forest  
-An ensemble method that builds many decision trees and averages their predictions to reduce overfitting and improve accuracy. It handles complex, nonlinear relationships in the data without requiring extensive feature engineering.
+Random Forest combines a lot of decision trees and averages them together. It is good at picking up more complicated patterns that a simple linear model might miss.
 
 ### Gradient Boosting
-A sequential ensemble technique where each new decision tree is trained to correct the mistakes of the previous trees. This gradually improves predictions but requires careful tuning of parameters like tree depth and learning rate to avoid overfitting.
+Gradient Boosting builds trees step by step, where each new tree tries to improve on the errors from the last one. It can work really well, but it is also easier to over-tune.
 
-- Selected model: **lasso**
-- Selection rationale: Selected Lasso as it had the best validation performance and the cleanest balance of accuracy, sparsity, and interpretability.
+Selected model: Lasso
+Selection rationale: We selected Lasso because it gave us the strongest validation results while also keeping the model simpler and easier to explain. It gave us a good balance between prediction accuracy and interpretability.
 
 ## Model Journey
 
@@ -160,10 +162,22 @@ Back-transform and dollar-scale metrics:
 | holdout_mae_dollar | 15,826.82 |
 | typical_relative_error = exp(holdout_rmse_log)-1 | 0.145656 (14.57%) |
 
-- A holdout RMSE of about 0.136 on the log scale corresponds to roughly 14.6% typical relative prediction error.
+- A holdout RMSE of about 0.136 on the log scale corresponds to roughly 14.6% typical relative prediction error. On unseen houses, the model was typically off by around 14 to 15 percent, or about $24,000 in RMSE terms.
 
 ### Outlier Sensitivity
 - Outlier influence was checked, but the main results are reported on the full consistent dataset.
+
+## What the model says matters most
+
+While some coefficients involved rare categories and should be treated carefully, the most intuitive recurring predictors were:
+
+GrLivArea
+OverallQual
+important Neighborhood indicators
+CentralAir_N
+basement and quality-related housing variables
+
+This gave us a very believable story: house prices were strongly influenced by size, quality, and location, with additional effects from comfort and condition features.
 
 ## Why Lasso Won
 - Best CV RMSE
